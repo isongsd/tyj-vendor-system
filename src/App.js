@@ -61,7 +61,7 @@ const App = () => {
                 setIsAuthReady(true);
             }
         } else {
-            console.error("Firebase aonfig is missing. Please set REACT_APP_FIREBASE_CONFIG environment variable.");
+            console.error("Firebase config is missing. Please set REACT_APP_FIREBASE_CONFIG environment variable.");
             setIsAuthReady(true); // 讓畫面可以顯示錯誤，而不是白畫面
         }
     }, []);
@@ -500,3 +500,4 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
 };
 
 export default App;
+"
