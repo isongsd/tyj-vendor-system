@@ -724,7 +724,7 @@ const GeminiModal = ({ config, onClose }) => {
 
 async function callGeminiAPI(prompt, setGeminiModal) {
     setGeminiModal({ isOpen: true, isLoading: true, content: '', error: '' });
-    const apiKey = "";
+    const apiKey = "AIzaSyB4iRSaKZ_n-INunHzly_Ygievf8iPJeW0";
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
     try {
