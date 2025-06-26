@@ -4,10 +4,51 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken }
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp, query, writeBatch, getDocs, setDoc } from 'firebase/firestore';
 
 // --- Firebase 設定 ---
-// 從 Netlify 的環境變數讀取，而不是寫死在程式碼中，這樣最安全
 const firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG || '{}');
 const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
 const initialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN || '';
+
+// A helper component to display deployment info only in development
+const DeploymentInfo = () => {
+    // These variables are only available in the development environment provided by the platform
+    const devFirebaseConfig = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
+    const devAppId = typeof __app_id !== 'undefined' ? __app_id : null;
+    const devAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    if (!devFirebaseConfig) {
+        return null; // Don't render anything if not in the special dev environment
+    }
+
+    return (
+        <div style={{ 
+            position: 'fixed', 
+            bottom: 0, 
+            left: 0, 
+            right: 0, 
+            backgroundColor: 'rgba(0,0,0,0.9)', 
+            color: 'white', 
+            padding: '15px', 
+            zIndex: 9999,
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            borderTop: '2px solid #ffca28'
+        }}>
+            <h3 style={{ marginTop: 0, color: '#ffca28', fontSize: '18px' }}>部署至 Netlify 所需的環境變數 (請複製以下內容)</h3>
+            <div style={{ marginBottom: '10px' }}>
+                <strong style={{ color: '#66d9ef' }}>REACT_APP_FIREBASE_CONFIG:</strong>
+                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', backgroundColor: '#444', padding: '5px', borderRadius: '4px' }}>{devFirebaseConfig}</pre>
+            </div>
+            <div style={{ marginBottom: '10px' }}>
+                <strong style={{ color: '#66d9ef' }}>REACT_APP_APP_ID:</strong>
+                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', backgroundColor: '#444', padding: '5px', borderRadius: '4px' }}>{devAppId}</pre>
+            </div>
+            <div>
+                <strong style={{ color: '#66d9ef' }}>REACT_APP_INITIAL_AUTH_TOKEN:</strong>
+                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', backgroundColor: '#444', padding: '5px', borderRadius: '4px' }}>{devAuthToken || '此處為空值是正常的'}</pre>
+            </div>
+        </div>
+    );
+};
 
 
 // --- App ---
@@ -36,10 +77,14 @@ const App = () => {
 
     // --- Firebase 初始化 & 認證 ---
     useEffect(() => {
-        // 確保 firebaseConfig 有內容才進行初始化
-        if (firebaseConfig && Object.keys(firebaseConfig).length > 0) {
+        let effectiveConfig = firebaseConfig;
+        if (typeof __firebase_config !== 'undefined' && Object.keys(effectiveConfig).length === 0) {
+            effectiveConfig = JSON.parse(__firebase_config);
+        }
+
+        if (effectiveConfig && Object.keys(effectiveConfig).length > 0) {
             try {
-                const app = initializeApp(firebaseConfig);
+                const app = initializeApp(effectiveConfig);
                 const authInstance = getAuth(app);
                 const dbInstance = getFirestore(app);
                 setDb(dbInstance);
@@ -47,8 +92,9 @@ const App = () => {
                 onAuthStateChanged(authInstance, async (user) => {
                     if (!user) {
                         try {
-                            if (initialAuthToken) {
-                                await signInWithCustomToken(authInstance, initialAuthToken);
+                           const token = initialAuthToken || (typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '');
+                            if (token) {
+                                await signInWithCustomToken(authInstance, token);
                             } else {
                                 await signInAnonymously(authInstance);
                             }
@@ -61,8 +107,10 @@ const App = () => {
                 setIsAuthReady(true);
             }
         } else {
-            console.error("Firebase config is missing. Please set REACT_APP_FIREBASE_CONFIG environment variable.");
-            setIsAuthReady(true); // 讓畫面可以顯示錯誤，而不是白畫面
+            // This case might happen during Netlify build before env vars are available.
+            // Or if the dev environment variables are missing.
+            console.warn("Firebase config is missing.");
+            setIsAuthReady(true); // Let the app render a loading/error state
         }
     }, []);
 
@@ -70,15 +118,17 @@ const App = () => {
     useEffect(() => {
         if (!isAuthReady || !db) return;
 
+        const effectiveAppId = appId === 'default-app-id' && typeof __app_id !== 'undefined' ? __app_id : appId;
+        const vendorsRef = collection(db, `artifacts/${effectiveAppId}/public/data/vendors`);
+
         const setupInitialData = async () => {
-            const vendorsRef = collection(db, `artifacts/${appId}/public/data/vendors`);
             try {
                 const snapshot = await getDocs(query(vendorsRef));
                 if (snapshot.empty) {
                     console.log("No initial data found. Setting up default admin and markets.");
                     const batch = writeBatch(db);
                     const sundaeDocRef = doc(vendorsRef, 'sd');
-                    const marketsRef = collection(db, `artifacts/${appId}/public/data/markets`);
+                    const marketsRef = collection(db, `artifacts/${effectiveAppId}/public/data/markets`);
                     
                     batch.set(sundaeDocRef, { name: '順德總', isAdmin: true });
                     batch.set(doc(vendorsRef, 'vendor-a'), { name: '攤主A', isAdmin: false });
@@ -93,9 +143,9 @@ const App = () => {
         setupInitialData();
 
         const unsubscribes = [
-            onSnapshot(collection(db, `artifacts/${appId}/public/data/vendors`), (snapshot) => setVendors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))),
-            onSnapshot(collection(db, `artifacts/${appId}/public/data/markets`), (snapshot) => setMarkets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))),
-            onSnapshot(collection(db, `artifacts/${appId}/public/data/bookings`), (snapshot) => {
+            onSnapshot(collection(db, `artifacts/${effectiveAppId}/public/data/vendors`), (snapshot) => setVendors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))),
+            onSnapshot(collection(db, `artifacts/${effectiveAppId}/public/data/markets`), (snapshot) => setMarkets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))),
+            onSnapshot(collection(db, `artifacts/${effectiveAppId}/public/data/bookings`), (snapshot) => {
                 setBookings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setIsLoading(false);
             })
@@ -104,6 +154,7 @@ const App = () => {
         return () => unsubscribes.forEach(unsub => unsub());
     }, [isAuthReady, db]);
 
+    // ... The rest of the App component logic is the same ...
     // --- 登入 & 登出邏輯 ---
     const handleLogin = () => {
         setLoginError('');
@@ -178,10 +229,15 @@ const App = () => {
     };
     const closeConfirmation = () => setConfirmation({ ...confirmation, isOpen: false });
 
-    // --- 登入畫面 ---
-    if (!currentUser) {
-        return (
-            <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 font-sans">
+    return (
+      <>
+        <DeploymentInfo />
+        {/* The rest of the JSX is the same */}
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8 font-sans">
+            {!isAuthReady || isLoading ? (
+                 <div className="flex justify-center items-center h-screen"><div>載入中...</div></div>
+            ) : !currentUser ? (
+                <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 font-sans">
                 <div className="w-full max-w-md bg-white rounded-xl shadow-2xl p-8 text-center">
                     <h1 className="text-3xl font-bold text-gray-800 mb-2">童顏家攤位管理系統</h1>
                     <p className="text-gray-600 mb-8">請輸入您的攤位編號登入</p>
@@ -194,13 +250,8 @@ const App = () => {
                     </div>
                 </div>
             </div>
-        );
-    }
-
-    // --- 主應用程式畫面 ---
-    return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8 font-sans">
-            <div className="max-w-7xl mx-auto">
+            ) : (
+                <div className="max-w-7xl mx-auto">
                 <header className="flex flex-col sm:flex-row justify-between items-center mb-6 pb-4 border-b-2 border-gray-200">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">童顏家攤位行事曆</h1>
@@ -257,15 +308,17 @@ const App = () => {
                     </div>
                 </main>
             </div>
-            {isModalOpen && db && (<BookingModal db={db} currentUser={currentUser} date={selectedDateForModal} booking={selectedBookingForModal} allBookings={bookings} markets={markets} onClose={closeModal} setConfirmation={setConfirmation} />)}
-            <ConfirmationModal isOpen={confirmation.isOpen} title={confirmation.title} message={confirmation.message} onConfirm={confirmation.onConfirm} onCancel={closeConfirmation} />
+            )}
         </div>
+        {isModalOpen && db && (<BookingModal db={db} currentUser={currentUser} date={selectedDateForModal} booking={selectedBookingForModal} allBookings={bookings} markets={markets} onClose={closeModal} setConfirmation={setConfirmation} />)}
+        <ConfirmationModal isOpen={confirmation.isOpen} title={confirmation.title} message={confirmation.message} onConfirm={confirmation.onConfirm} onCancel={closeConfirmation} />
+      </>
     );
 };
 
 // --- 當日詳情面板 ---
 const DailyDetailView = ({ date, bookings, vendors, currentUser, onClose, onAdd, onEdit }) => {
-    const dayBookings = bookings.filter(b => b.date === date).sort((a,b) => a.marketName.localeCompare(b.marketName));
+    const dayBookings = bookings.filter(b => b.date === date).sort((a,b) => a.marketName.localeCompare(b.name));
     const vendorNames = vendors.reduce((acc, v) => ({ ...acc, [v.id]: v.name }), {});
 
     return (
@@ -300,7 +353,8 @@ const AdminPanel = ({ db, vendors, setConfirmation, bookings, markets }) => {
     const [newName, setNewName] = useState('');
     const [isAdmin, setIsAdmin] = useState(false);
     const [error, setError] = useState('');
-    const vendorsColPath = `artifacts/${appId}/public/data/vendors`;
+    const effectiveAppId = appId === 'default-app-id' && typeof __app_id !== 'undefined' ? __app_id : appId;
+    const vendorsColPath = `artifacts/${effectiveAppId}/public/data/vendors`;
 
     const handleAddVendor = async (e) => {
         e.preventDefault(); setError('');
@@ -373,8 +427,9 @@ const BookingModal = ({ db, currentUser, date, booking, allBookings, markets, on
     const [error, setError] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     
-    const bookingsColPath = `artifacts/${appId}/public/data/bookings`;
-    const marketsColPath = `artifacts/${appId}/public/data/markets`;
+    const effectiveAppId = appId === 'default-app-id' && typeof __app_id !== 'undefined' ? __app_id : appId;
+    const bookingsColPath = `artifacts/${effectiveAppId}/public/data/bookings`;
+    const marketsColPath = `artifacts/${effectiveAppId}/public/data/markets`;
 
     const cities = useMemo(() => [...new Set(markets.map(m => m.city))].sort(), [markets]);
     const filteredMarkets = useMemo(() => markets.filter(m => m.city === selectedCity).sort((a,b) => a.name.localeCompare(b.name)), [markets, selectedCity]);
@@ -500,4 +555,3 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
 };
 
 export default App;
-"
