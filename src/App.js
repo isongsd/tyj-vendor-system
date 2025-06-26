@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken }
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp, query, writeBatch, getDocs, setDoc, where, orderBy, limit } from 'firebase/firestore';
 
 // --- Firebase & API 設定 (安全版) ---
-let firebaseConfig, appId, initialAuthToken, geminiApiKey;
+let firebaseConfig, appId, initialAuthToken, geminiApiKey, weatherApiKey;
 // eslint-disable-next-line no-undef
 const isDevEnv = typeof __firebase_config !== 'undefined';
 
@@ -16,11 +16,13 @@ if (isDevEnv) {
   // eslint-disable-next-line no-undef
   initialAuthToken = __initial_auth_token || '';
   geminiApiKey = ""; 
+  weatherApiKey = "c585542828b9776035445d8cfc048b59";
 } else {
   firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG || '{}');
   appId = process.env.REACT_APP_APP_ID || 'default-app-id';
   initialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN || '';
   geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY || ''; 
+  weatherApiKey = process.env.REACT_APP_WEATHER_API_KEY || 'c585542828b9776035445d8cfc048b59'; 
 }
 
 const TAIWAN_CITIES = [ "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣", "臺北市", "新北市", "桃園市", "臺中市", "臺南市", "高雄市", "基隆市", "新竹縣", "新竹市", "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義縣", "嘉義市", "屏東縣" ];
@@ -163,7 +165,7 @@ const App = () => {
         {accountModal.isOpen && currentUser && <AccountModal onClose={() => setAccountModal({ isOpen: false })} currentUser={currentUser} db={db} />}
         {resetPasswordModal.isOpen && <ResetPasswordModal config={resetPasswordModal} onClose={() => setResetPasswordModal({ isOpen: false, vendor: null })} db={db} />}
         {dayDetail.isOpen && <DayDetailModal detail={dayDetail} onClose={() => setDayDetail({isOpen: false, date: null})} bookings={bookings} vendors={vendors} currentUser={currentUser} onAddBooking={openBookingModal} onEditBooking={openBookingModal} setGeminiModal={setGeminiModal} />}
-        {bookingModal.isOpen && <BookingModal config={bookingModal} onClose={() => setBookingModal({isOpen: false, date:null, booking:null})} currentUser={currentUser} allBookings={bookings} markets={markets} db={db} setConfirmation={setConfirmation} />}
+        {bookingModal.isOpen && <BookingModal config={bookingModal} onClose={() => setBookingModal({isOpen: false, date:null, booking:null})} currentUser={currentUser} allBookings={bookings} markets={markets} db={db} setConfirmation={setConfirmation} weatherApiKey={weatherApiKey} />}
         <ConfirmationModal config={confirmation} onClose={() => setConfirmation({ ...confirmation, isOpen: false })} />
         <GeminiModal config={geminiModal} onClose={() => setGeminiModal({ ...geminiModal, isOpen: false })} />
       </>
