@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken }
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp, query, writeBatch, getDocs, setDoc, where, orderBy, limit } from 'firebase/firestore';
 
 // --- Firebase & API 設定 (安全版) ---
-let firebaseConfig, appId, initialAuthToken, geminiApiKey;
+let firebaseConfig, appId, initialAuthToken, geminiApiKey, weatherApiKey;
 // eslint-disable-next-line no-undef
 const isDevEnv = typeof __firebase_config !== 'undefined';
 
@@ -16,11 +16,13 @@ if (isDevEnv) {
   // eslint-disable-next-line no-undef
   initialAuthToken = __initial_auth_token || '';
   geminiApiKey = ""; 
+  weatherApiKey = "c585542828b9776035445d8cfc048b59";
 } else {
   firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG || '{}');
   appId = process.env.REACT_APP_APP_ID || 'default-app-id';
   initialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN || '';
   geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY || ''; 
+  weatherApiKey = process.env.REACT_APP_WEATHER_API_KEY || 'c585542828b9776035445d8cfc048b59'; 
 }
 
 const TAIWAN_CITIES = [ "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣", "臺北市", "新北市", "桃園市", "臺中市", "臺南市", "高雄市", "基隆市", "新竹縣", "新竹市", "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義縣", "嘉義市", "屏東縣" ];
@@ -141,24 +143,22 @@ const App = () => {
     // --- 主應用程式畫面 ---
     return (
       <>
-        <div className="min-h-screen bg-gray-100 font-sans">
-            <div className="max-w-4xl mx-auto bg-white sm:shadow-lg">
-                <div className="p-4">
-                    <Header currentUser={currentUser} onLogout={handleLogout} onLoginClick={() => setLoginModal({ isOpen: true })} onAccountClick={() => setAccountModal({ isOpen: true })} />
-                    
-                    {(isLoading && !bookings.length) ? (
-                         <div className="text-center p-10 text-gray-500">
-                            <p>系統資料載入中，請稍候...</p>
-                        </div>
-                    ) : (
-                        <>
-                            <Announcements announcements={announcements} />
-                            {currentUser && <SmartSuggestions currentUser={currentUser} bookings={bookings} markets={markets} />}
-                            <CalendarGrid currentDate={currentDate} setCurrentDate={setCurrentDate} bookings={bookings} onDayClick={handleDayClick} />
-                            {currentUser?.isAdmin && <AdminPanel db={db} vendors={vendors} bookings={bookings} markets={markets} announcements={announcements} setConfirmation={setConfirmation} setResetPasswordModal={setResetPasswordModal} />}
-                        </>
-                    )}
-                </div>
+        <div className="min-h-screen bg-gray-100 p-2 sm:p-6 lg:p-8 font-sans">
+            <div className="max-w-4xl mx-auto bg-white sm:rounded-2xl sm:shadow-lg p-4 sm:p-6">
+                <Header currentUser={currentUser} onLogout={handleLogout} onLoginClick={() => setLoginModal({ isOpen: true })} onAccountClick={() => setAccountModal({ isOpen: true })} />
+                
+                {(isLoading && !bookings.length) ? (
+                     <div className="text-center p-10 text-gray-500">
+                        <p>系統資料載入中，請稍候...</p>
+                    </div>
+                ) : (
+                    <>
+                        <Announcements announcements={announcements} />
+                        {currentUser && <SmartSuggestions currentUser={currentUser} bookings={bookings} markets={markets} />}
+                        <CalendarGrid currentDate={currentDate} setCurrentDate={setCurrentDate} bookings={bookings} onDayClick={handleDayClick} />
+                        {currentUser?.isAdmin && <AdminPanel db={db} vendors={vendors} bookings={bookings} markets={markets} announcements={announcements} setConfirmation={setConfirmation} setResetPasswordModal={setResetPasswordModal} />}
+                    </>
+                )}
             </div>
         </div>
         {loginModal.isOpen && <LoginModal onClose={() => setLoginModal({ isOpen: false })} vendors={vendors} onLoginSuccess={handleLoginSuccess} db={db} />}
@@ -184,43 +184,7 @@ const Announcements = ({ announcements }) => {
     );
 }
 const Header = ({ currentUser, onLogout, onLoginClick, onAccountClick }) => ( <header className="flex justify-between items-center mb-4 pb-4 border-b"> <h1 className="text-xl sm:text-2xl font-bold text-gray-900">童顏家攤位行事曆</h1> {currentUser ? ( <div className="flex items-center gap-2"> <p className="text-sm text-gray-600 hidden sm:block">歡迎, {currentUser.name}</p> <p className="text-sm font-semibold text-gray-800">({currentUser.id})</p> <button onClick={onAccountClick} className="text-xs bg-gray-500 hover:bg-gray-600 text-white font-semibold py-1 px-2 rounded-md transition">我的帳號</button> <button onClick={onLogout} className="text-xs bg-red-500 hover:bg-red-600 text-white font-semibold py-1 px-2 rounded-md transition">登出</button> </div> ) : ( <button onClick={onLoginClick} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">登入</button> )} </header> );
-const SmartSuggestions = ({ currentUser, bookings, markets }) => { 
-    const suggestions = useMemo(() => {
-        if (!currentUser || markets.length === 0) return [];
-        const marketMap = new Map(markets.map(m => [m.id, m]));
-        const twoWeeksAgo = new Date();
-        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-
-        const marketStats = bookings.reduce((acc, b) => {
-            if (!acc[b.marketId]) {
-                acc[b.marketId] = { sales: 0, count: 0, lastBooked: null };
-            }
-            acc[b.marketId].sales += b.salesQuantity || 0;
-            acc[b.marketId].count++;
-            const bookingDate = new Date(b.date);
-            if (!acc[b.marketId].lastBooked || bookingDate > acc[b.marketId].lastBooked) {
-                acc[b.marketId].lastBooked = bookingDate;
-            }
-            return acc;
-        }, {});
-
-        const potentialMarkets = markets
-            .filter(m => !marketStats[m.id] || marketStats[m.id].lastBooked < twoWeeksAgo)
-            .map(m => ({ ...m, sales: marketStats[m.id]?.sales || 0, count: marketStats[m.id]?.count || 0 }));
-        
-        if (potentialMarkets.length === 0) return [];
-        
-        potentialMarkets.sort((a, b) => {
-            if (b.sales !== a.sales) return b.sales - a.sales;
-            return b.count - a.count;
-        });
-
-        return potentialMarkets.slice(0, 5).map(m => ({...m, reason: `歷史總銷量: ${m.sales}`}));
-
-    }, [currentUser, bookings, markets]);
-    
-    return ( <div className="mb-4"> <h3 className="text-md font-bold text-gray-800 mb-2">💡 智慧推薦</h3> <div className="flex flex-wrap gap-2"> {suggestions.length > 0 ? suggestions.map(s => (<div key={s.id} className="p-2 bg-indigo-100 rounded-lg text-sm"><p className="font-bold text-indigo-800">{s.name}</p><p className="text-xs text-indigo-600">{s.reason}</p></div>)) : <p className="text-sm text-gray-500">暫無推薦，所有市場近期都很活躍喔！</p>} </div> </div> ); 
-};
+const SmartSuggestions = ({ currentUser, bookings, markets }) => { const suggestions = useMemo(() => { if (!currentUser || markets.length === 0) return []; const marketMap = new Map(markets.map(m => [m.id, m])); const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14); const marketLastBooked = bookings.reduce((acc, b) => { if (!acc[b.marketId] || new Date(b.date) > acc[b.marketId]) { acc[b.marketId] = new Date(b.date); } return acc; }, {}); const recentMarkets = new Set(Object.entries(marketLastBooked).filter(([, date]) => date >= twoWeeksAgo).map(([marketId]) => marketId)); const potentialMarkets = markets.filter(m => !recentMarkets.has(m.id)); if (potentialMarkets.length === 0) return []; const userBookings = bookings.filter(b => b.vendorId === currentUser.id); const userMarketCounts = userBookings.reduce((acc, b) => { if (potentialMarkets.some(pm => pm.id === b.marketId)) { acc[b.marketId] = (acc[b.marketId] || 0) + 1; } return acc; }, {}); const sortedUserMarkets = Object.entries(userMarketCounts).sort(([,a],[,b]) => b - a); const mostVisitedId = sortedUserMarkets[0]?.[0]; const leastVisitedId = sortedUserMarkets[sortedUserMarkets.length - 1]?.[0]; const allMarketCounts = bookings.reduce((acc, b) => { if (potentialMarkets.some(pm => pm.id === b.marketId)) { acc[b.marketId] = (acc[b.marketId] || 0) + 1; } return acc; }, {}); const generalTopMarkets = Object.entries(allMarketCounts).sort(([,a],[,b]) => b - a); let recs = new Map(); if (mostVisitedId && marketMap.has(mostVisitedId)) { recs.set(mostVisitedId, { ...marketMap.get(mostVisitedId), reason: '您的熱門首選' }); } if (leastVisitedId && leastVisitedId !== mostVisitedId && marketMap.has(leastVisitedId)) { recs.set(leastVisitedId, { ...marketMap.get(leastVisitedId), reason: '您的潛力黑馬' }); } for (const [marketId] of generalTopMarkets) { if (recs.size >= 5) break; if (marketMap.has(marketId) && !recs.has(marketId)) { recs.set(marketId, { ...marketMap.get(marketId), reason: '近期整體熱門' }); } } return Array.from(recs.values()); }, [currentUser, bookings, markets]); return ( <div className="mb-4"> <h3 className="text-md font-bold text-gray-800 mb-2">💡 智慧推薦</h3> <div className="flex flex-wrap gap-2"> {suggestions.length > 0 ? suggestions.map(s => (<div key={s.id} className="p-2 bg-indigo-100 rounded-lg text-sm"><p className="font-bold text-indigo-800">{s.name}</p><p className="text-xs text-indigo-600">{s.reason}</p></div>)) : <p className="text-sm text-gray-500">暫無推薦，所有市場近期都很活躍喔！</p>} </div> </div> ); };
 const CalendarGrid = ({ currentDate, setCurrentDate, bookings, onDayClick }) => { const startOfMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), [currentDate]); const endOfMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), [currentDate]); const startDay = useMemo(() => startOfMonth.getDay(), [startOfMonth]); const daysInMonth = useMemo(() => endOfMonth.getDate(), [endOfMonth]); const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)); const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)); return ( <div className="mt-4"> <div className="flex justify-between items-center mb-2"> <button onClick={prevMonth} className="p-2 rounded-full hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg></button> <h2 className="text-lg font-bold text-gray-800">{currentDate.getFullYear()} 年 {currentDate.getMonth() + 1} 月</h2> <button onClick={nextMonth} className="p-2 rounded-full hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg></button> </div> <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-gray-500 mb-1"> {['日', '一', '二', '三', '四', '五', '六'].map(day => <div key={day} className="py-1">{day}</div>)} </div> <div className="grid grid-cols-7 gap-1"> {Array.from({ length: startDay }).map((_, i) => <div key={`empty-${i}`}></div>)} {Array.from({ length: daysInMonth }).map((_, day) => { const dayNumber = day + 1; const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayNumber); const dateStr = date.toISOString().slice(0,10); const dayBookings = bookings.filter(b => b.date === dateStr); return ( <div key={dayNumber} onClick={() => onDayClick(dateStr)} className="h-20 sm:h-24 border border-gray-200 rounded-md p-1 flex flex-col cursor-pointer hover:bg-blue-50 transition-colors"> <span className="font-medium text-sm self-center sm:self-start">{dayNumber}</span> <div className="flex-grow overflow-hidden text-xs space-y-0.5 mt-1"> {dayBookings.map(b => ( <div key={b.id} className="px-1 rounded bg-green-100 text-green-800 font-semibold">{b.marketName}</div> ))} </div> </div> ); })} </div> </div> ); };
 
 const SalesInput = ({ booking, db, setEditingSales }) => {
