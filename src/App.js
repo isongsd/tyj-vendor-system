@@ -290,7 +290,7 @@ const DayDetailModal = ({ detail, onClose, bookings, vendors, currentUser, onAdd
     );
 };
 
-const AdminPanel = ({ db, vendors, bookings, setConfirmation, setResetPasswordModal }) => {
+const AdminPanel = ({ db, vendors, bookings, markets, setConfirmation, setResetPasswordModal }) => {
     const [newVendorId, setNewVendorId] = useState('');
     const [newVendorName, setNewVendorName] = useState('');
     const [newVendorPassword, setNewVendorPassword] = useState('');
@@ -302,6 +302,8 @@ const AdminPanel = ({ db, vendors, bookings, setConfirmation, setResetPasswordMo
     const [marketError, setMarketError] = useState('');
 
     const [editingMarket, setEditingMarket] = useState(null);
+    const [editingVendor, setEditingVendor] = useState(null);
+
 
     const vendorsColPath = `artifacts/${appId}/public/data/vendors`;
     const marketsColPath = `artifacts/${appId}/public/data/markets`;
@@ -321,6 +323,15 @@ const AdminPanel = ({ db, vendors, bookings, setConfirmation, setResetPasswordMo
       catch(err) { alert('刪除失敗：' + err.message); }
     };
     
+    const handleUpdateVendor = async () => {
+        if (!editingVendor || !editingVendor.name) { return alert('攤主名稱不可為空！'); }
+        try {
+            const vendorRef = doc(db, vendorsColPath, editingVendor.id);
+            await updateDoc(vendorRef, { name: editingVendor.name, isAdmin: editingVendor.isAdmin });
+            setEditingVendor(null);
+        } catch (err) { alert('更新攤主失敗: ' + err.message); }
+    };
+
     const handleAddNewMarket = async (e) => {
         e.preventDefault(); setMarketError('');
         if (!newMarketCity || !newMarketName) { return setMarketError('縣市和市場名稱不可為空！'); }
@@ -450,12 +461,26 @@ const AdminPanel = ({ db, vendors, bookings, setConfirmation, setResetPasswordMo
                     </form>
                     <div className="space-y-2 max-h-40 overflow-y-auto p-1">
                         {vendors.map(v => (
-                            <div key={v.id} className="flex justify-between items-center p-2 bg-white rounded border">
-                                <div><span className="font-semibold">{v.name}</span> ({v.id}) {v.isAdmin && '👑'}</div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setResetPasswordModal({ isOpen: true, vendor: v })} className="text-xs bg-yellow-500 text-white py-1 px-2 rounded">重設密碼</button>
-                                    {v.id !== 'sd' && <button onClick={()=>setConfirmation({ isOpen: true, title: '刪除攤主', message: `您確定要刪除 ${v.name} (${v.id}) 嗎？`, onConfirm: () => handleDeleteVendor(v.id) })} className="text-xs bg-red-500 text-white py-1 px-2 rounded">刪除</button>}
-                                </div>
+                            <div key={v.id}>
+                                {editingVendor?.id === v.id ? (
+                                    <div className="p-2 bg-yellow-100 rounded border border-yellow-300 space-y-2">
+                                        <input value={editingVendor.name} onChange={e => setEditingVendor({...editingVendor, name: e.target.value})} className="w-full p-1 border rounded" placeholder="攤主名稱" />
+                                        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editingVendor.isAdmin} onChange={e => setEditingVendor({...editingVendor, isAdmin: e.target.checked})} />設為管理員</label>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleUpdateVendor} className="flex-1 text-xs bg-green-500 text-white py-1 px-2 rounded">儲存</button>
+                                            <button onClick={() => setEditingVendor(null)} className="flex-1 text-xs bg-gray-400 text-white py-1 px-2 rounded">取消</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-between items-center p-2 bg-white rounded border">
+                                        <div><span className="font-semibold">{v.name}</span> ({v.id}) {v.isAdmin && '👑'}</div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setEditingVendor(v)} className="text-xs bg-blue-500 text-white py-1 px-2 rounded">編輯</button>
+                                            <button onClick={() => setResetPasswordModal({ isOpen: true, vendor: v })} className="text-xs bg-yellow-500 text-white py-1 px-2 rounded">重設密碼</button>
+                                            {v.id !== 'sd' && <button onClick={()=>setConfirmation({ isOpen: true, title: '刪除攤主', message: `您確定要刪除 ${v.name} (${v.id}) 嗎？`, onConfirm: () => handleDeleteVendor(v.id) })} className="text-xs bg-red-500 text-white py-1 px-2 rounded">刪除</button>}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
