@@ -148,7 +148,7 @@ const App = () => {
                 )}
             </div>
         </div>
-        {loginModal.isOpen && <LoginModal onClose={() => setLoginModal({ isOpen: false })} vendors={vendors} onLoginSuccess={handleLoginSuccess} />}
+        {loginModal.isOpen && <LoginModal onClose={() => setLoginModal({ isOpen: false })} vendors={vendors} onLoginSuccess={handleLoginSuccess} db={db} />}
         {accountModal.isOpen && currentUser && <AccountModal onClose={() => setAccountModal({ isOpen: false })} currentUser={currentUser} db={db} />}
         {resetPasswordModal.isOpen && <ResetPasswordModal config={resetPasswordModal} onClose={() => setResetPasswordModal({ isOpen: false, vendor: null })} db={db} />}
         {dayDetail.isOpen && <DayDetailModal detail={dayDetail} onClose={() => setDayDetail({isOpen: false, date: null})} bookings={bookings} vendors={vendors} currentUser={currentUser} onAddBooking={openBookingModal} onEditBooking={openBookingModal} setGeminiModal={setGeminiModal} />}
@@ -430,18 +430,38 @@ const AdminPanel = ({ db, vendors, bookings, setConfirmation, setResetPasswordMo
     );
 };
 
-const LoginModal = ({ onClose, vendors, onLoginSuccess }) => {
+const LoginModal = ({ onClose, vendors, onLoginSuccess, db }) => {
     const [id, setId] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
 
-    const handleLogin = () => {
+    const handleLogin = async () => {
         setError('');
         const vendor = vendors.find(v => v.id.toLowerCase() === id.toLowerCase());
-        if (vendor && vendor.password === password) {
-            onLoginSuccess(vendor);
+
+        if (vendor) {
+            // Case 1: Existing user with password
+            if (vendor.password) {
+                if (vendor.password === password) {
+                    onLoginSuccess(vendor);
+                } else {
+                    setError('密碼錯誤！');
+                }
+            } 
+            // Case 2: Existing user WITHOUT password (first login after update)
+            else if (password) {
+                try {
+                    const vendorRef = doc(db, `artifacts/${appId}/public/data/vendors`, vendor.id);
+                    await updateDoc(vendorRef, { password: password });
+                    onLoginSuccess({ ...vendor, password: password }); // Log in with the new password
+                } catch (err) {
+                    setError('設定初始密碼失敗，請稍後再試。');
+                }
+            } else {
+                setError('請輸入您的初始密碼。');
+            }
         } else {
-            setError('編號或密碼錯誤！');
+            setError('找不到此攤位編號！');
         }
     };
 
@@ -598,7 +618,7 @@ const BookingModal = ({ config, onClose, currentUser, allBookings, markets, db, 
         const targetDate = new Date(date); 
         const sevenDays = 7 * 24 * 60 * 60 * 1000; 
         const conflict = allBookings.some(b => b.marketId === marketId && (!booking || b.id !== booking.id) && Math.abs(targetDate.getTime() - new Date(b.date).getTime()) < sevenDays); 
-        if (conflict) { return setError("錯誤：一週內已有攤主登記此市場！"); } 
+        if (conflict) { return setError("錯誤：一週内已有攤主登記此市場！"); } 
         setIsSaving(true); 
         const marketDetails = markets.find(m => m.id === marketId); 
         const data = { date, marketId, marketName: marketDetails.name, marketCity: marketDetails.city, vendorId: currentUser.id, vendorName: currentUser.name, updatedAt: serverTimestamp(), }; 
@@ -704,7 +724,7 @@ const GeminiModal = ({ config, onClose }) => {
 
 async function callGeminiAPI(prompt, setGeminiModal) {
     setGeminiModal({ isOpen: true, isLoading: true, content: '', error: '' });
-    const apiKey = "AIzaSyB4iRSaKZ_n-INunHzly_Ygievf8iPJeW0";
+    const apiKey = "";
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
     try {
