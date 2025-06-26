@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken }
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp, query, writeBatch, getDocs, setDoc, where, orderBy, limit } from 'firebase/firestore';
 
 // --- Firebase & API 設定 (安全版) ---
-let firebaseConfig, appId, initialAuthToken, geminiApiKey, weatherApiKey;
+let firebaseConfig, appId, initialAuthToken, geminiApiKey;
 // eslint-disable-next-line no-undef
 const isDevEnv = typeof __firebase_config !== 'undefined';
 
@@ -16,13 +16,11 @@ if (isDevEnv) {
   // eslint-disable-next-line no-undef
   initialAuthToken = __initial_auth_token || '';
   geminiApiKey = ""; 
-  weatherApiKey = "CWA-8E9ED581-4941-4830-B5E5-B4BF66585035";
 } else {
   firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG || '{}');
   appId = process.env.REACT_APP_APP_ID || 'default-app-id';
   initialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN || '';
   geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY || ''; 
-  weatherApiKey = process.env.REACT_APP_WEATHER_API_KEY || 'CWA-8E9ED581-4941-4830-B5E5-B4BF66585035'; 
 }
 
 const TAIWAN_CITIES = [ "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣", "臺北市", "新北市", "桃園市", "臺中市", "臺南市", "高雄市", "基隆市", "新竹縣", "新竹市", "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義縣", "嘉義市", "屏東縣" ];
@@ -101,7 +99,6 @@ const App = () => {
             onSnapshot(collection(db, `artifacts/${appId}/public/data/vendors`), (s) => {
                 const fetchedVendors = s.docs.map(d => ({ id: d.id, ...d.data() }));
                 setVendors(fetchedVendors);
-                 // 自動登入檢查
                 const savedVendorId = localStorage.getItem('tyjVendorId');
                 if (savedVendorId) {
                     const savedVendor = fetchedVendors.find(v => v.id === savedVendorId);
