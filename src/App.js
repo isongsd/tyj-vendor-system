@@ -4,8 +4,11 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken }
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp, query, writeBatch, getDocs, setDoc } from 'firebase/firestore';
 
 // --- Firebase 設定 ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+// 從 Netlify 的環境變數讀取，而不是寫死在程式碼中，這樣最安全
+const firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG || '{}');
+const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+const initialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN || '';
+
 
 // --- App ---
 const App = () => {
@@ -33,27 +36,33 @@ const App = () => {
 
     // --- Firebase 初始化 & 認證 ---
     useEffect(() => {
-        try {
-            const app = initializeApp(firebaseConfig);
-            const authInstance = getAuth(app);
-            const dbInstance = getFirestore(app);
-            setDb(dbInstance);
+        // 確保 firebaseConfig 有內容才進行初始化
+        if (firebaseConfig && Object.keys(firebaseConfig).length > 0) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                const authInstance = getAuth(app);
+                const dbInstance = getFirestore(app);
+                setDb(dbInstance);
 
-            onAuthStateChanged(authInstance, async (user) => {
-                if (!user) {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(authInstance, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(authInstance);
-                        }
-                    } catch (error) { console.error("Error during sign-in:", error); }
-                }
+                onAuthStateChanged(authInstance, async (user) => {
+                    if (!user) {
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(authInstance, initialAuthToken);
+                            } else {
+                                await signInAnonymously(authInstance);
+                            }
+                        } catch (error) { console.error("Error during sign-in:", error); }
+                    }
+                    setIsAuthReady(true);
+                });
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
                 setIsAuthReady(true);
-            });
-        } catch (error) {
-            console.error("Firebase initialization failed:", error);
-            setIsAuthReady(true);
+            }
+        } else {
+            console.error("Firebase aonfig is missing. Please set REACT_APP_FIREBASE_CONFIG environment variable.");
+            setIsAuthReady(true); // 讓畫面可以顯示錯誤，而不是白畫面
         }
     }, []);
 
