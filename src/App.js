@@ -134,9 +134,18 @@ const App = () => {
         <div className="min-h-screen bg-gray-100 p-2 sm:p-6 lg:p-8 font-sans">
             <div className="max-w-4xl mx-auto bg-white sm:rounded-2xl sm:shadow-lg p-4 sm:p-6">
                 <Header currentUser={currentUser} onLogout={handleLogout} onLoginClick={() => setLoginModal({ isOpen: true })} onAccountClick={() => setAccountModal({ isOpen: true })} />
-                {currentUser && <SmartSuggestions currentUser={currentUser} bookings={bookings} markets={markets} />}
-                <CalendarGrid currentDate={currentDate} setCurrentDate={setCurrentDate} bookings={bookings} onDayClick={handleDayClick} />
-                {currentUser?.isAdmin && <AdminPanel db={db} vendors={vendors} bookings={bookings} setConfirmation={setConfirmation} setResetPasswordModal={setResetPasswordModal} />}
+                
+                {(!isAuthReady || isLoading) && !bookings.length ? (
+                     <div className="text-center p-10 text-gray-500">
+                        <p>系統資料載入中，請稍候...</p>
+                    </div>
+                ) : (
+                    <>
+                        {currentUser && <SmartSuggestions currentUser={currentUser} bookings={bookings} markets={markets} />}
+                        <CalendarGrid currentDate={currentDate} setCurrentDate={setCurrentDate} bookings={bookings} onDayClick={handleDayClick} />
+                        {currentUser?.isAdmin && <AdminPanel db={db} vendors={vendors} bookings={bookings} setConfirmation={setConfirmation} setResetPasswordModal={setResetPasswordModal} />}
+                    </>
+                )}
             </div>
         </div>
         {loginModal.isOpen && <LoginModal onClose={() => setLoginModal({ isOpen: false })} vendors={vendors} onLoginSuccess={handleLoginSuccess} />}
@@ -695,7 +704,7 @@ const GeminiModal = ({ config, onClose }) => {
 
 async function callGeminiAPI(prompt, setGeminiModal) {
     setGeminiModal({ isOpen: true, isLoading: true, content: '', error: '' });
-    const apiKey = "";
+    const apiKey = "AIzaSyB4iRSaKZ_n-INunHzly_Ygievf8iPJeW0";
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
     try {
