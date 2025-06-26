@@ -15,7 +15,7 @@ if (isDevEnv) {
   appId = __app_id;
   // eslint-disable-next-line no-undef
   initialAuthToken = __initial_auth_token || '';
-  geminiApiKey = ""; // 在開發環境中，由平台注入
+  geminiApiKey = "AIzaSyB4iRSaKZ_n-INunHzly_Ygievf8iPJeW0"; // 在開發環境中，由平台注入
 } else {
   firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG || '{}');
   appId = process.env.REACT_APP_APP_ID || 'default-app-id';
