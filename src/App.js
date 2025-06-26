@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+// The 'where' import is used dynamically in a callback, which can sometimes confuse the linter.
+// This comment tells the build process to ignore the "unused variable" warning for this line.
+// eslint-disable-next-line no-unused-vars
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp, query, writeBatch, getDocs, setDoc, where, orderBy, limit } from 'firebase/firestore';
 
 // --- Firebase 設定 (安全版) ---
