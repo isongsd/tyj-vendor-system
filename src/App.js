@@ -355,8 +355,82 @@ const AdminPanel = ({ db, vendors, bookings, setConfirmation, setResetPasswordMo
     };
 
 
-    const handleExport = () => { /* ... existing export logic ... */ };
-    const handleImport = (event) => { /* ... existing import logic ... */ };
+    const handleExport = () => {
+        const vendorMap = new Map(vendors.map(v => [v.id, v.name]));
+        let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+        csvContent += "date,marketCity,marketName,vendorId,vendorName\r\n";
+        const sortedBookings = [...bookings].sort((a, b) => new Date(a.date) - new Date(b.date));
+        sortedBookings.forEach(b => {
+            const row = [ b.date, b.marketCity || '', `"${b.marketName || ''}"`, b.vendorId, `"${vendorMap.get(b.vendorId) || b.vendorName || "未知"}"` ].join(',');
+            csvContent += row + "\r\n";
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `童顏家攤位預約紀錄_${new Date().toISOString().slice(0,10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleImport = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const text = e.target.result;
+            const lines = text.split('\n').filter(line => line.trim() !== '');
+            if (lines.length < 2) {
+                alert('CSV檔案是空的或格式不符。');
+                return;
+            }
+            const headers = lines[0].trim().split(',');
+            const requiredHeaders = ['date', 'marketName', 'vendorId'];
+            if (!requiredHeaders.every(h => headers.includes(h))) {
+                alert(`CSV 檔案缺少必要的欄位，需要包含: ${requiredHeaders.join(', ')}`);
+                return;
+            }
+
+            const newBookings = lines.slice(1).map(line => {
+                const values = line.trim().split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                const booking = headers.reduce((obj, header, index) => {
+                    obj[header] = values[index]?.replace(/"/g, '') || '';
+                    return obj;
+                }, {});
+                return booking;
+            });
+            
+            setConfirmation({ isOpen: true, title: '確認匯入', message: `您確定要從檔案匯入 ${newBookings.length} 筆紀錄嗎？系統會自動跳過重複的資料。`, 
+                onConfirm: async () => {
+                    const bookingsColPath = `artifacts/${appId}/public/data/bookings`;
+                    const batch = writeBatch(db);
+                    let importedCount = 0;
+                    for (const b of newBookings) {
+                        if (!b.date || !b.marketName || !b.vendorId) continue;
+                        const q = query(collection(db, bookingsColPath), where("date", "==", b.date), where("vendorId", "==", b.vendorId), where("marketName", "==", b.marketName));
+                        const existing = await getDocs(q);
+                        if (existing.empty) {
+                           const newBookingRef = doc(collection(db, bookingsColPath));
+                           batch.set(newBookingRef, {
+                               date: b.date,
+                               marketCity: b.marketCity || '',
+                               marketName: b.marketName,
+                               vendorId: b.vendorId,
+                               vendorName: vendors.find(v => v.id === b.vendorId)?.name || '',
+                               createdAt: serverTimestamp(),
+                               updatedAt: serverTimestamp(),
+                           });
+                           importedCount++;
+                        }
+                    }
+                    await batch.commit();
+                    alert(`匯入完成！成功新增 ${importedCount} 筆新紀錄。`);
+                }
+            });
+        };
+        reader.readAsText(file, 'UTF-8');
+        event.target.value = null; // Reset file input
+    };
 
     return (
         <div className="mt-8 pt-6 border-t">
@@ -427,7 +501,7 @@ const AdminPanel = ({ db, vendors, bookings, setConfirmation, setResetPasswordMo
                     <summary className="font-semibold cursor-pointer">資料備份/還原</summary>
                     <div className="flex gap-2 mt-2">
                          <button onClick={handleExport} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">匯出 (CSV)</button>
-                         <label className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition cursor-pointer text-center">
+                         <label className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition cursor-pointer flex justify-center items-center">
                             匯入 (CSV)
                             <input type="file" accept=".csv" onChange={handleImport} className="hidden"/>
                          </label>
