@@ -16,7 +16,7 @@ if (isDevEnv) {
   // eslint-disable-next-line no-undef
   initialAuthToken = __initial_auth_token || '';
   geminiApiKey = ""; 
-  weatherApiKey = "c585542828b9776035445d8cfc048b59"; // 使用一個通用的OpenWeatherMap金鑰
+  weatherApiKey = "c585542828b9776035445d8cfc048b59";
 } else {
   firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG || '{}');
   appId = process.env.REACT_APP_APP_ID || 'default-app-id';
@@ -24,6 +24,8 @@ if (isDevEnv) {
   geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY || ''; 
   weatherApiKey = process.env.REACT_APP_WEATHER_API_KEY || 'c585542828b9776035445d8cfc048b59'; 
 }
+
+const TAIWAN_CITIES = [ "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣", "臺北市", "新北市", "桃園市", "臺中市", "臺南市", "高雄市", "基隆市", "新竹縣", "新竹市", "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義縣", "嘉義市", "屏東縣" ];
 
 // --- App 主元件 ---
 const App = () => {
@@ -99,6 +101,7 @@ const App = () => {
             onSnapshot(collection(db, `artifacts/${appId}/public/data/vendors`), (s) => {
                 const fetchedVendors = s.docs.map(d => ({ id: d.id, ...d.data() }));
                 setVendors(fetchedVendors);
+                 // 自動登入檢查
                 const savedVendorId = localStorage.getItem('tyjVendorId');
                 if (savedVendorId) {
                     const savedVendor = fetchedVendors.find(v => v.id === savedVendorId);
