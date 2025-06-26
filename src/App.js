@@ -250,7 +250,7 @@ const CalendarGrid = ({ currentDate, setCurrentDate, bookings, onDayClick }) => 
                             <span className="font-medium text-sm self-center sm:self-start">{dayNumber}</span>
                             <div className="flex-grow overflow-hidden text-xs space-y-0.5 mt-1">
                                 {dayBookings.map(b => (
-                                    <div key={b.id} className="px-1 rounded bg-green-100 text-green-800 font-semibold truncate">{b.marketName}</div>
+                                    <div key={b.id} className="px-1 rounded bg-green-100 text-green-800 font-semibold">{b.marketName}</div>
                                 ))}
                             </div>
                         </div>
