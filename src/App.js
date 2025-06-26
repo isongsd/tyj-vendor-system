@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken }
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp, query, writeBatch, getDocs, setDoc, where } from 'firebase/firestore';
 
 // --- Firebase 設定 (安全版) ---
-let firebaseConfig, appId, initialAuthToken;
+let firebaseConfig, appId, initialAuthToken, geminiApiKey;
 // eslint-disable-next-line no-undef
 const isDevEnv = typeof __firebase_config !== 'undefined';
 
@@ -15,10 +15,12 @@ if (isDevEnv) {
   appId = __app_id;
   // eslint-disable-next-line no-undef
   initialAuthToken = __initial_auth_token || '';
+  geminiApiKey = ""; // 在開發環境中，由平台注入
 } else {
   firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG || '{}');
   appId = process.env.REACT_APP_APP_ID || 'default-app-id';
   initialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN || '';
+  geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY || ''; // 從環境變數讀取您的金鑰
 }
 
 // --- App 主元件 ---
@@ -724,13 +726,17 @@ const GeminiModal = ({ config, onClose }) => {
 
 async function callGeminiAPI(prompt, setGeminiModal) {
     setGeminiModal({ isOpen: true, isLoading: true, content: '', error: '' });
-    const apiKey = "AIzaSyB4iRSaKZ_n-INunHzly_Ygievf8iPJeW0";
+    const apiKey = geminiApiKey; // Use the globally defined key
+    if (!apiKey && !isDevEnv) {
+        setGeminiModal({ isOpen: true, isLoading: false, content: '', error: 'Gemini API 金鑰未設定。' });
+        return;
+    }
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
     try {
         const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if (!response.ok) throw new Error(`API 請求失敗: ${response.status}`);
         const result = await response.json();
+        if (!response.ok) throw new Error(result?.error?.message || `API 請求失敗: ${response.status}`);
         const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) {
             setGeminiModal({ isOpen: true, isLoading: false, content: text, error: '' });
@@ -738,7 +744,7 @@ async function callGeminiAPI(prompt, setGeminiModal) {
             throw new Error("從 API 收到的回應格式無效");
         }
     } catch (error) {
-        setGeminiModal({ isOpen: true, isLoading: false, content: '', error: error.message });
+        setGeminiModal({ isOpen: true, isLoading: false, content: '', error: `AI 功能暫時無法使用：${error.message}` });
     }
 }
 
