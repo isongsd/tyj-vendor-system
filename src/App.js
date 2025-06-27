@@ -80,8 +80,8 @@ const App = () => {
     
     // --- 手動初始化函式 ---
     const setupInitialData = async () => {
-        if (!db) {
-            alert("資料庫未連接，無法初始化！");
+        if (!db || !isAuthReady) {
+            alert("資料庫或認證尚未就緒，請稍後再試！");
             return;
         }
         const vendorsRef = collection(db, `artifacts/${appId}/public/data/vendors`);
@@ -159,7 +159,7 @@ const App = () => {
             <div className="max-w-4xl mx-auto bg-white sm:rounded-2xl sm:shadow-lg p-4 sm:p-6">
                 <Header currentUser={currentUser} onLogout={handleLogout} onLoginClick={() => setLoginModal({ isOpen: true })} onAccountClick={() => setAccountModal({ isOpen: true })} />
                 
-                {!currentUser && <ForceInitButton onInit={setupInitialData} />}
+                {!currentUser && <ForceInitButton onInit={setupInitialData} isReady={isAuthReady} />}
 
                 {(isLoading && !bookings.length) ? (
                      <div className="text-center p-10 text-gray-500">
@@ -187,7 +187,7 @@ const App = () => {
 };
 
 // --- 強制初始化按鈕元件 ---
-const ForceInitButton = ({ onInit }) => {
+const ForceInitButton = ({ onInit, isReady }) => {
     return (
         <div className="my-4 p-4 border-2 border-dashed border-red-400 bg-red-50 rounded-lg text-center">
             <p className="text-red-700 font-semibold mb-2">
@@ -195,15 +195,16 @@ const ForceInitButton = ({ onInit }) => {
             </p>
             <button
                 onClick={onInit}
-                className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
+                disabled={!isReady}
+                className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-                強制初始化系統資料
+                {isReady ? '強制初始化系統資料' : '正在準備中...'}
             </button>
         </div>
     );
 };
 
-// --- 其他子元件 ---
+// --- 其他子元件 (維持不變) ---
 const Announcements = ({ announcements }) => {
     const limitedAnnouncements = announcements.slice(0, 1);
     if (limitedAnnouncements.length === 0) return null;
@@ -581,7 +582,7 @@ const BookingModal = ({ config, onClose, currentUser, allBookings, markets, db, 
     );
 };
 const ConfirmationModal = ({ config, onClose }) => { const { isOpen, title, message, onConfirm } = config; if (!isOpen) return null; return (<div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[60]"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center"><h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3><p className="text-gray-600 mb-6">{message}</p><div className="flex justify-center gap-4"><button onClick={onClose} className="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg">取消</button><button onClick={() => { onConfirm(); onClose(); }} className="bg-red-600 text-white font-bold py-2 px-6 rounded-lg">確定</button></div></div></div>); };
-const GeminiModal = ({ config, onClose }) => { const { isOpen, isLoading, content, error } = config; if (!isOpen) return null; const handleCopy = () => { if(content) { navigator.clipboard.writeText(content).then(() => alert('文案已複製！')).catch(err => alert('複製失敗')); } }; return ( <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[60]"> <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6"> <div className="flex justify-between items-center mb-4"> <h3 className="text-xl font-bold">✨ AI 小助理</h3> <button onClick={onClose} className="text-2xl">&times;</button> </div> <div className="bg-gray-50 p-4 rounded-lg min-h-[200px] max-h-[40vh] overflow-y-auto"> {isLoading ? <p>AI思考中...</p> : error ? <p className="text-red-500">{error}</p> : <p className="whitespace-pre-wrap">{content}</p>} </div> <div className="mt-6 flex gap-4"> <button onClick={handleCopy} disabled={!content || isLoading} className="flex-1 bg-blue-600 text-white font-bold py-2 rounded-lg">複製</button> <button onClick={onClose} className="flex-1 bg-gray-200 font-bold py-2 rounded-lg">關閉</button> </div> </div> </div> ); };
+const GeminiModal = ({ config, onClose }) => { const { isOpen, isLoading, content, error } = config; if (!isOpen) return null; const handleCopy = () => { if(content) { navigator.clipboard.writeText(content).then(() => alert('文案已複製！')).catch(err => alert('複製失敗')); } }; return ( <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[60]"><div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6"> <div className="flex justify-between items-center mb-4"> <h3 className="text-xl font-bold">✨ AI 小助理</h3> <button onClick={onClose} className="text-2xl">&times;</button> </div> <div className="bg-gray-50 p-4 rounded-lg min-h-[200px] max-h-[40vh] overflow-y-auto"> {isLoading ? <p>AI思考中...</p> : error ? <p className="text-red-500">{error}</p> : <p className="whitespace-pre-wrap">{content}</p>} </div> <div className="mt-6 flex gap-4"> <button onClick={handleCopy} disabled={!content || isLoading} className="flex-1 bg-blue-600 text-white font-bold py-2 rounded-lg">複製</button> <button onClick={onClose} className="flex-1 bg-gray-200 font-bold py-2 rounded-lg">關閉</button> </div> </div> </div> ); };
 async function callGeminiAPI(prompt, setGeminiModal) { setGeminiModal({ isOpen: true, isLoading: true, content: '', error: '' }); const apiKey = geminiApiKey; if (!apiKey && !isDevEnv) { setGeminiModal({ isOpen: true, isLoading: false, content: '', error: 'Gemini API 金鑰未設定。' }); return; } const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`; const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] }; try { const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const result = await response.json(); if (!response.ok) throw new Error(result?.error?.message || `API 請求失敗: ${response.status}`); const text = result.candidates?.[0]?.content?.parts?.[0]?.text; if (text) { setGeminiModal({ isOpen: true, isLoading: false, content: text, error: '' }); } else { throw new Error("從 API 收到的回應格式無效"); } } catch (error) { setGeminiModal({ isOpen: true, isLoading: false, content: '', error: `AI 功能暫時無法使用：${error.message}` }); } }
 
 export default App;
