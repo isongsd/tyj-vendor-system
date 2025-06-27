@@ -218,7 +218,49 @@ const SmartSuggestions = ({ currentUser, bookings, markets }) => {
     
     return ( <div className="mb-4"> <h3 className="text-md font-bold text-gray-800 mb-2">💡 智慧推薦</h3> <div className="flex flex-wrap gap-2"> {suggestions.length > 0 ? suggestions.map(s => (<div key={s.id} className="p-2 bg-indigo-100 rounded-lg text-sm"><p className="font-bold text-indigo-800">{s.name}</p></div>)) : <p className="text-sm text-gray-500">暫無推薦，所有市場近期都很活躍喔！</p>} </div> </div> ); 
 };
-const CalendarGrid = ({ currentDate, setCurrentDate, bookings, onDayClick }) => { const startOfMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), [currentDate]); const endOfMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), [currentDate]); const startDay = useMemo(() => startOfMonth.getDay(), [startOfMonth]); const daysInMonth = useMemo(() => endOfMonth.getDate(), [endOfMonth]); const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)); const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)); return ( <div className="mt-4"> <div className="flex justify-between items-center mb-2"> <button onClick={prevMonth} className="p-2 rounded-full hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg></button> <h2 className="text-lg font-bold text-gray-800">{currentDate.getFullYear()} 年 {currentDate.getMonth() + 1} 月</h2> <button onClick={nextMonth} className="p-2 rounded-full hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg></button> </div> <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-gray-500 mb-1"> {['日', '一', '二', '三', '四', '五', '六'].map(day => <div key={day} className="py-1">{day}</div>)} </div> <div className="grid grid-cols-7 gap-1"> {Array.from({ length: startDay }).map((_, i) => <div key={`empty-${i}`}></div>)} {Array.from({ length: daysInMonth }).map((_, day) => { const dayNumber = day + 1; const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayNumber); const dateStr = date.toISOString().slice(0,10); const dayBookings = bookings.filter(b => b.date === dateStr); return ( <div key={dayNumber} onClick={() => onDayClick(dateStr)} className="h-20 sm:h-24 border border-gray-200 rounded-md p-1 flex flex-col cursor-pointer hover:bg-blue-50 transition-colors"> <span className="font-medium text-sm self-center sm:self-start">{dayNumber}</span> <div className="flex-grow overflow-hidden text-xs space-y-0.5 mt-1"> {dayBookings.map(b => ( <div key={b.id} className="px-1 rounded bg-green-100 text-green-800 font-semibold">{b.marketName}{b.remark && '*'}</div> ))} </div> </div> ); })} </div> </div> ); };
+const CalendarGrid = ({ currentDate, setCurrentDate, bookings, onDayClick }) => {
+    const startOfMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), [currentDate]);
+    const endOfMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), [currentDate]);
+    const startDay = useMemo(() => startOfMonth.getDay(), [startOfMonth]);
+    const daysInMonth = useMemo(() => endOfMonth.getDate(), [endOfMonth]);
+    const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+
+    return (
+        <div className="mt-4">
+            <div className="flex justify-between items-center mb-2">
+                <button onClick={prevMonth} className="p-2 rounded-full hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg></button>
+                <h2 className="text-lg font-bold text-gray-800">{currentDate.getFullYear()} 年 {currentDate.getMonth() + 1} 月</h2>
+                <button onClick={nextMonth} className="p-2 rounded-full hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg></button>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-gray-500 mb-1">
+                {['日', '一', '二', '三', '四', '五', '六'].map(day => <div key={day} className="py-1">{day}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: startDay }).map((_, i) => <div key={`empty-${i}`}></div>)}
+                {Array.from({ length: daysInMonth }).map((_, day) => {
+                    const dayNumber = day + 1;
+                    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayNumber);
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const dayOfMonth = String(date.getDate()).padStart(2, '0');
+                    const dateStr = `${year}-${month}-${dayOfMonth}`;
+                    const dayBookings = bookings.filter(b => b.date === dateStr);
+                    return (
+                        <div key={dayNumber} onClick={() => onDayClick(dateStr)} className="h-20 sm:h-24 border border-gray-200 rounded-md p-1 flex flex-col cursor-pointer hover:bg-blue-50 transition-colors">
+                            <span className="font-medium text-sm self-center sm:self-start">{dayNumber}</span>
+                            <div className="flex-grow overflow-hidden text-xs space-y-0.5 mt-1">
+                                {dayBookings.map(b => (
+                                    <div key={b.id} className="px-1 rounded bg-green-100 text-green-800 font-semibold">{b.marketName}{b.remark && '*'}</div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
 const SalesInput = ({ booking, db, onSaveSuccess }) => {
     const [sales, setSales] = useState(booking.salesQuantity || '');
     const handleSave = async () => {
