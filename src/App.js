@@ -59,22 +59,30 @@ const App = () => {
                 setDb(dbInstance);
 
                 onAuthStateChanged(authInstance, async (user) => {
-                    if (!user) {
+                    if (user) {
+                      setIsAuthReady(true);
+                    } else {
                         try {
                            const token = initialAuthToken;
-                            if (token) await signInWithCustomToken(authInstance, token);
-                            else await signInAnonymously(authInstance);
-                        } catch (error) { console.error("Error during sign-in:", error); }
+                            if (token) {
+                              await signInWithCustomToken(authInstance, token);
+                            } else {
+                              await signInAnonymously(authInstance);
+                            }
+                            setIsAuthReady(true);
+                        } catch (error) { 
+                            console.error("Error during sign-in:", error); 
+                            setIsAuthReady(false); // 登入失敗，認證未就緒
+                        }
                     }
-                    setIsAuthReady(true);
                 });
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
-                setIsAuthReady(true);
+                setIsAuthReady(false);
             }
         } else {
             console.warn("Firebase config is missing.");
-            setIsAuthReady(true); 
+            setIsAuthReady(false); 
         }
     }, []);
     
@@ -95,6 +103,7 @@ const App = () => {
             batch.set(doc(marketsRef, 'market1'), { city: '彰化縣', name: '和美市場' });
             await batch.commit();
             alert("初始化成功！現在可以用 sd / 123 登入。");
+            window.location.reload(); // 重新整理頁面以確保資料載入
         } catch (error) {
             console.error("Forced initialization failed:", error);
             alert("初始化失敗：" + error.message);
@@ -105,14 +114,19 @@ const App = () => {
     useEffect(() => {
         if (!isAuthReady || !db) return;
         
+        const vendorsRef = collection(db, `artifacts/${appId}/public/data/vendors`);
+        const checkAndSetup = async () => {
+            const snapshot = await getDocs(query(vendorsRef, limit(1)));
+            if (snapshot.empty) {
+                console.log("Vendors collection is empty, suggesting initialization.");
+            }
+        };
+        checkAndSetup();
+        
         const unsubscribes = [
             onSnapshot(collection(db, `artifacts/${appId}/public/data/vendors`), (s) => {
                 const fetchedVendors = s.docs.map(d => ({ id: d.id, ...d.data() }));
                 setVendors(fetchedVendors);
-                if (fetchedVendors.length === 0) {
-                    console.log("Vendors collection is empty, running initial setup...");
-                    setupInitialData();
-                }
                 const savedVendorId = localStorage.getItem('tyjVendorId');
                 if (savedVendorId) {
                     const savedVendor = fetchedVendors.find(v => v.id === savedVendorId);
@@ -128,7 +142,7 @@ const App = () => {
             })
         ];
         
-        const timer = setTimeout(() => setIsLoading(false), 1500);
+        const timer = setTimeout(() => setIsLoading(false), 2000); // 延長一點載入時間
         
         return () => {
             clearTimeout(timer);
@@ -159,9 +173,9 @@ const App = () => {
             <div className="max-w-4xl mx-auto bg-white sm:rounded-2xl sm:shadow-lg p-4 sm:p-6">
                 <Header currentUser={currentUser} onLogout={handleLogout} onLoginClick={() => setLoginModal({ isOpen: true })} onAccountClick={() => setAccountModal({ isOpen: true })} />
                 
-                {!currentUser && <ForceInitButton onInit={setupInitialData} isReady={isAuthReady} />}
+                {!currentUser && vendors.length === 0 && <ForceInitButton onInit={setupInitialData} isReady={isAuthReady} />}
 
-                {(isLoading && !bookings.length) ? (
+                {(isLoading) ? (
                      <div className="text-center p-10 text-gray-500">
                         <p>系統資料載入中，請稍候...</p>
                     </div>
