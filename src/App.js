@@ -29,7 +29,6 @@ const TAIWAN_CITIES = [ "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金
 const App = () => {
     // --- 狀態管理 (State) ---
     const [currentUser, setCurrentUser] = useState(null);
-    const [firebaseUser, setFirebaseUser] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [vendors, setVendors] = useState([]);
     const [markets, setMarkets] = useState([]);
@@ -59,49 +58,29 @@ const App = () => {
                 const dbInstance = getFirestore(app);
                 setDb(dbInstance);
 
-                const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
-                    if (user) {
-                        setFirebaseUser(user);
-                        setIsAuthReady(true);
-                    } else {
+                onAuthStateChanged(authInstance, async (user) => {
+                    if (!user) {
                         try {
                            const token = initialAuthToken;
-                            if (token) {
-                                await signInWithCustomToken(authInstance, token);
-                            } else {
-                                await signInAnonymously(authInstance);
-                            }
-                        } catch (error) { 
-                            console.error("Error during sign-in, falling back to anonymous:", error);
-                            try {
-                                await signInAnonymously(authInstance);
-                            } catch (anonError) {
-                                console.error("Anonymous sign-in also failed:", anonError)
-                                setIsLoading(false);
-                            }
-                        }
+                            if (token) await signInWithCustomToken(authInstance, token);
+                            else await signInAnonymously(authInstance);
+                        } catch (error) { console.error("Error during sign-in:", error); }
                     }
+                    setIsAuthReady(true);
                 });
-                return () => unsubscribe();
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
                 setIsAuthReady(true);
-                setIsLoading(false);
             }
         } else {
             console.warn("Firebase config is missing.");
             setIsAuthReady(true); 
-            setIsLoading(false);
         }
     }, []);
 
     // --- 資料庫讀取 & 初始化 ---
     useEffect(() => {
-        if (!isAuthReady || !db || !firebaseUser) {
-            if(isAuthReady) setIsLoading(false);
-            return;
-        }
-        
+        if (!isAuthReady || !db) return;
         const vendorsRef = collection(db, `artifacts/${appId}/public/data/vendors`);
         const setupInitialData = async () => {
             const snapshot = await getDocs(query(vendorsRef));
@@ -116,7 +95,6 @@ const App = () => {
             }
         };
         setupInitialData().catch(console.error);
-
         const unsubscribes = [
             onSnapshot(collection(db, `artifacts/${appId}/public/data/vendors`), (s) => {
                 const fetchedVendors = s.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -136,12 +114,13 @@ const App = () => {
             })
         ];
         
-        setIsLoading(false);
+        const timer = setTimeout(() => setIsLoading(false), 1500);
         
         return () => {
+            clearTimeout(timer);
             unsubscribes.forEach(unsub => unsub());
         };
-    }, [isAuthReady, db, firebaseUser]);
+    }, [isAuthReady, db]);
 
     // --- 事件處理函式 ---
     const handleLoginSuccess = (vendor) => {
@@ -162,24 +141,22 @@ const App = () => {
     // --- 主應用程式畫面 ---
     return (
       <>
-        <div className="min-h-screen bg-gray-100 font-sans">
-            <div className="max-w-4xl mx-auto bg-white sm:shadow-lg">
-                <div className="p-4">
-                    <Header currentUser={currentUser} onLogout={handleLogout} onLoginClick={() => setLoginModal({ isOpen: true })} onAccountClick={() => setAccountModal({ isOpen: true })} />
-                    
-                    {(isLoading) ? (
-                         <div className="text-center p-10 text-gray-500">
-                            <p>系統資料載入中，請稍候...</p>
-                        </div>
-                    ) : (
-                        <>
-                            <Announcements announcements={announcements} />
-                            {currentUser && <SmartSuggestions currentUser={currentUser} bookings={bookings} markets={markets} />}
-                            <CalendarGrid currentDate={currentDate} setCurrentDate={setCurrentDate} bookings={bookings} onDayClick={handleDayClick} />
-                            {currentUser?.isAdmin && <AdminPanel db={db} vendors={vendors} bookings={bookings} markets={markets} announcements={announcements} setConfirmation={setConfirmation} setResetPasswordModal={setResetPasswordModal} />}
-                        </>
-                    )}
-                </div>
+        <div className="min-h-screen bg-gray-100 p-2 sm:p-6 lg:p-8 font-sans">
+            <div className="max-w-4xl mx-auto bg-white sm:rounded-2xl sm:shadow-lg p-4 sm:p-6">
+                <Header currentUser={currentUser} onLogout={handleLogout} onLoginClick={() => setLoginModal({ isOpen: true })} onAccountClick={() => setAccountModal({ isOpen: true })} />
+                
+                {(isLoading && !bookings.length) ? (
+                     <div className="text-center p-10 text-gray-500">
+                        <p>系統資料載入中，請稍候...</p>
+                    </div>
+                ) : (
+                    <>
+                        <Announcements announcements={announcements} />
+                        {currentUser && <SmartSuggestions currentUser={currentUser} bookings={bookings} markets={markets} />}
+                        <CalendarGrid currentDate={currentDate} setCurrentDate={setCurrentDate} bookings={bookings} onDayClick={handleDayClick} />
+                        {currentUser?.isAdmin && <AdminPanel db={db} vendors={vendors} bookings={bookings} markets={markets} announcements={announcements} setConfirmation={setConfirmation} setResetPasswordModal={setResetPasswordModal} />}
+                    </>
+                )}
             </div>
         </div>
         {loginModal.isOpen && <LoginModal onClose={() => setLoginModal({ isOpen: false })} vendors={vendors} onLoginSuccess={handleLoginSuccess} db={db} />}
@@ -205,15 +182,52 @@ const Announcements = ({ announcements }) => {
     );
 }
 const Header = ({ currentUser, onLogout, onLoginClick, onAccountClick }) => ( <header className="flex justify-between items-center mb-4 pb-4 border-b"> <h1 className="text-xl sm:text-2xl font-bold text-gray-900">童顏家攤位行事曆</h1> {currentUser ? ( <div className="flex items-center gap-2"> <p className="text-sm text-gray-600 hidden sm:block">歡迎, {currentUser.name}</p> <p className="text-sm font-semibold text-gray-800">({currentUser.id})</p> <button onClick={onAccountClick} className="text-xs bg-gray-500 hover:bg-gray-600 text-white font-semibold py-1 px-2 rounded-md transition">我的帳號</button> <button onClick={onLogout} className="text-xs bg-red-500 hover:bg-red-600 text-white font-semibold py-1 px-2 rounded-md transition">登出</button> </div> ) : ( <button onClick={onLoginClick} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">登入</button> )} </header> );
-const SmartSuggestions = ({ currentUser, bookings, markets }) => { const suggestions = useMemo(() => { if (!currentUser || markets.length === 0) return []; const marketMap = new Map(markets.map(m => [m.id, m])); const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14); const marketLastBooked = bookings.reduce((acc, b) => { if (!acc[b.marketId] || new Date(b.date) > acc[b.marketId]) { acc[b.marketId] = new Date(b.date); } return acc; }, {}); const recentMarkets = new Set(Object.entries(marketLastBooked).filter(([, date]) => date >= twoWeeksAgo).map(([marketId]) => marketId)); const potentialMarkets = markets.filter(m => !recentMarkets.has(m.id)); if (potentialMarkets.length === 0) return []; const userBookings = bookings.filter(b => b.vendorId === currentUser.id); const userMarketCounts = userBookings.reduce((acc, b) => { if (potentialMarkets.some(pm => pm.id === b.marketId)) { acc[b.marketId] = (acc[b.marketId] || 0) + 1; } return acc; }, {}); const sortedUserMarkets = Object.entries(userMarketCounts).sort(([,a],[,b]) => b - a); const mostVisitedId = sortedUserMarkets[0]?.[0]; const leastVisitedId = sortedUserMarkets[sortedUserMarkets.length - 1]?.[0]; const allMarketCounts = bookings.reduce((acc, b) => { if (potentialMarkets.some(pm => pm.id === b.marketId)) { acc[b.marketId] = (acc[b.marketId] || 0) + 1; } return acc; }, {}); const generalTopMarkets = Object.entries(allMarketCounts).sort(([,a],[,b]) => b - a); let recs = new Map(); if (mostVisitedId && marketMap.has(mostVisitedId)) { recs.set(mostVisitedId, { ...marketMap.get(mostVisitedId), reason: '您的熱門首選' }); } if (leastVisitedId && leastVisitedId !== mostVisitedId && marketMap.has(leastVisitedId)) { recs.set(leastVisitedId, { ...marketMap.get(leastVisitedId), reason: '您的潛力黑馬' }); } for (const [marketId] of generalTopMarkets) { if (recs.size >= 5) break; if (marketMap.has(marketId) && !recs.has(marketId)) { recs.set(marketId, { ...marketMap.get(marketId), reason: '近期整體熱門' }); } } return Array.from(recs.values()); }, [currentUser, bookings, markets]); return ( <div className="mb-4"> <h3 className="text-md font-bold text-gray-800 mb-2">💡 智慧推薦</h3> <div className="flex flex-wrap gap-2"> {suggestions.length > 0 ? suggestions.map(s => (<div key={s.id} className="p-2 bg-indigo-100 rounded-lg text-sm"><p className="font-bold text-indigo-800">{s.name}</p><p className="text-xs text-indigo-600">{s.reason}</p></div>)) : <p className="text-sm text-gray-500">暫無推薦，所有市場近期都很活躍喔！</p>} </div> </div> ); };
+const SmartSuggestions = ({ currentUser, bookings, markets }) => { 
+    const suggestions = useMemo(() => {
+        if (!currentUser || markets.length === 0) return [];
+        const marketMap = new Map(markets.map(m => [m.id, m]));
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+        const marketStats = bookings.reduce((acc, b) => {
+            if (!acc[b.marketId]) {
+                acc[b.marketId] = { sales: 0, count: 0, lastBooked: null };
+            }
+            acc[b.marketId].sales += b.salesQuantity || 0;
+            acc[b.marketId].count++;
+            const bookingDate = new Date(b.date);
+            if (!acc[b.marketId].lastBooked || bookingDate > acc[b.marketId].lastBooked) {
+                acc[b.marketId].lastBooked = bookingDate;
+            }
+            return acc;
+        }, {});
+
+        const potentialMarkets = markets
+            .filter(m => !marketStats[m.id] || marketStats[m.id].lastBooked < twoWeeksAgo)
+            .map(m => ({ ...m, sales: marketStats[m.id]?.sales || 0, count: marketStats[m.id]?.count || 0 }));
+        
+        if (potentialMarkets.length === 0) return [];
+        
+        potentialMarkets.sort((a, b) => {
+            if (b.sales !== a.sales) return b.sales - a.sales;
+            return b.count - a.count;
+        });
+
+        return potentialMarkets.slice(0, 5).map(m => ({...m, reason: `歷史總銷量: ${m.sales}`}));
+
+    }, [currentUser, bookings, markets]);
+    
+    return ( <div className="mb-4"> <h3 className="text-md font-bold text-gray-800 mb-2">💡 智慧推薦</h3> <div className="flex flex-wrap gap-2"> {suggestions.length > 0 ? suggestions.map(s => (<div key={s.id} className="p-2 bg-indigo-100 rounded-lg text-sm"><p className="font-bold text-indigo-800">{s.name}</p><p className="text-xs text-indigo-600">{s.reason}</p></div>)) : <p className="text-sm text-gray-500">暫無推薦，所有市場近期都很活躍喔！</p>} </div> </div> ); 
+};
 const CalendarGrid = ({ currentDate, setCurrentDate, bookings, onDayClick }) => { const startOfMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), [currentDate]); const endOfMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), [currentDate]); const startDay = useMemo(() => startOfMonth.getDay(), [startOfMonth]); const daysInMonth = useMemo(() => endOfMonth.getDate(), [endOfMonth]); const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)); const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)); return ( <div className="mt-4"> <div className="flex justify-between items-center mb-2"> <button onClick={prevMonth} className="p-2 rounded-full hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg></button> <h2 className="text-lg font-bold text-gray-800">{currentDate.getFullYear()} 年 {currentDate.getMonth() + 1} 月</h2> <button onClick={nextMonth} className="p-2 rounded-full hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg></button> </div> <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-gray-500 mb-1"> {['日', '一', '二', '三', '四', '五', '六'].map(day => <div key={day} className="py-1">{day}</div>)} </div> <div className="grid grid-cols-7 gap-1"> {Array.from({ length: startDay }).map((_, i) => <div key={`empty-${i}`}></div>)} {Array.from({ length: daysInMonth }).map((_, day) => { const dayNumber = day + 1; const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayNumber); const dateStr = date.toISOString().slice(0,10); const dayBookings = bookings.filter(b => b.date === dateStr); return ( <div key={dayNumber} onClick={() => onDayClick(dateStr)} className="h-20 sm:h-24 border border-gray-200 rounded-md p-1 flex flex-col cursor-pointer hover:bg-blue-50 transition-colors"> <span className="font-medium text-sm self-center sm:self-start">{dayNumber}</span> <div className="flex-grow overflow-hidden text-xs space-y-0.5 mt-1"> {dayBookings.map(b => ( <div key={b.id} className="px-1 rounded bg-green-100 text-green-800 font-semibold">{b.marketName}</div> ))} </div> </div> ); })} </div> </div> ); };
 
-const SalesInput = ({ booking, db, setEditingSales }) => {
+const SalesInput = ({ booking, db, setEditingSales, onSaveSuccess }) => {
     const [sales, setSales] = useState(booking.salesQuantity || '');
     const handleSave = async () => {
         const bookingRef = doc(db, `artifacts/${appId}/public/data/bookings`, booking.id);
         await updateDoc(bookingRef, { salesQuantity: Number(sales) || 0 });
         setEditingSales(null);
+        if(onSaveSuccess) onSaveSuccess(); // Close modal after save
     };
     return (
         <div className="mt-2 flex gap-2">
@@ -224,7 +238,6 @@ const SalesInput = ({ booking, db, setEditingSales }) => {
 };
 
 const DayDetailModal = ({ detail, onClose, bookings, vendors, currentUser, onAddBooking, onEditBooking, setGeminiModal, db }) => { 
-    const [editingSales, setEditingSales] = useState(null);
     if (!detail.isOpen) return null; 
     const dayBookings = bookings.filter(b => b.date === detail.date).sort((a,b) => a.marketName.localeCompare(b.name)); 
     const vendorMap = new Map(vendors.map(v => [v.id, v.name])); 
@@ -249,10 +262,10 @@ const DayDetailModal = ({ detail, onClose, bookings, vendors, currentUser, onAdd
                                 </div>
                             </div> 
                             {currentUser?.id === b.vendorId && (
-                                <> 
-                                    <button onClick={() => handleGeneratePromoText(b)} className="mt-2 w-full text-sm bg-purple-500 hover:bg-purple-600 text-white font-semibold py-1 px-2 rounded-md">✨ 產生宣傳文案</button> 
-                                    {editingSales === b.id ? <SalesInput booking={b} db={db} setEditingSales={setEditingSales} /> : <button onClick={()=> setEditingSales(b.id)} className="mt-2 w-full text-sm bg-gray-600 hover:bg-gray-700 text-white font-semibold py-1 px-2 rounded-md">回報銷售數量</button> }
-                                </>
+                                <div className="mt-2 space-y-2"> 
+                                    <SalesInput booking={b} db={db} setEditingSales={() => {}} onSaveSuccess={onClose} />
+                                    <button onClick={() => handleGeneratePromoText(b)} className="w-full text-sm bg-purple-500 hover:bg-purple-600 text-white font-semibold py-1 px-2 rounded-md">✨ 產生宣傳文案</button> 
+                                </div>
                             )} 
                         </div> 
                     )) : <p className="text-gray-400 text-center py-10">本日尚無登記。</p>}
@@ -262,7 +275,7 @@ const DayDetailModal = ({ detail, onClose, bookings, vendors, currentUser, onAdd
         </div> 
     ); 
 };
-const AdminPanel = ({ db, vendors, markets, announcements, setConfirmation, setResetPasswordModal }) => { const [newVendorId, setNewVendorId] = useState(''); const [newVendorName, setNewVendorName] = useState(''); const [newVendorPassword, setNewVendorPassword] = useState(''); const [isNewVendorAdmin, setIsNewVendorAdmin] = useState(false); const [vendorError, setVendorError] = useState(''); const [newMarketCity, setNewMarketCity] = useState(TAIWAN_CITIES[0]); const [newMarketName, setNewMarketName] = useState(''); const [marketError, setMarketError] = useState(''); const [newAnnouncement, setNewAnnouncement] = useState(''); const [announcementError, setAnnouncementError] = useState(''); const [editingMarket, setEditingMarket] = useState(null); const [editingVendor, setEditingVendor] = useState(null); const [editingAnnouncement, setEditingAnnouncement] = useState(null); const vendorsColPath = `artifacts/${appId}/public/data/vendors`; const marketsColPath = `artifacts/${appId}/public/data/markets`; const announcementsColPath = `artifacts/${appId}/public/data/announcements`; const handleAddVendor = async (e) => { e.preventDefault(); setVendorError(''); if (!newVendorId || !newVendorName || !newVendorPassword) { return setVendorError('編號、名稱和密碼不可為空！'); } if (vendors.some(v => v.id.toLowerCase() === newVendorId.toLowerCase())) { return setVendorError('此編號已存在！'); } try { await setDoc(doc(db, vendorsColPath, newVendorId), { name: newVendorName, isAdmin: isNewVendorAdmin, password: newVendorPassword }); setNewVendorId(''); setNewVendorName(''); setNewVendorPassword(''); setIsNewVendorAdmin(false); } catch (err) { setVendorError('新增失敗：' + err.message); } }; const handleDeleteVendor = async (vendorId) => { try { await deleteDoc(doc(db, vendorsColPath, vendorId)); } catch(err) { alert('刪除失敗：' + err.message); } }; const handleUpdateVendor = async () => { if (!editingVendor || !editingVendor.name) { return alert('攤主名稱不可為空！'); } try { const vendorRef = doc(db, vendorsColPath, editingVendor.id); await updateDoc(vendorRef, { name: editingVendor.name, isAdmin: editingVendor.isAdmin }); setEditingVendor(null); } catch (err) { alert('更新攤主失敗: ' + err.message); } }; const handleAddNewMarket = async (e) => { e.preventDefault(); setMarketError(''); if (!newMarketCity || !newMarketName) { return setMarketError('縣市和市場名稱不可為空！'); } try { await addDoc(collection(db, marketsColPath), { city: newMarketCity, name: newMarketName }); setNewMarketCity(TAIWAN_CITIES[0]); setNewMarketName(''); } catch (err) { setMarketError('新增市場失敗: ' + err.message); } }; const handleUpdateMarket = async () => { if (!editingMarket || !editingMarket.city || !editingMarket.name) { return alert('縣市和市場名稱不可為空！'); } try { const marketRef = doc(db, marketsColPath, editingMarket.id); await updateDoc(marketRef, { city: editingMarket.city, name: editingMarket.name }); setEditingMarket(null); } catch (err) { alert('更新失敗: ' + err.message); } }; const handleDeleteMarket = (market) => { setConfirmation({ isOpen: true, title: '刪除市場', message: `確定要刪除「${market.name}」嗎？`, onConfirm: async () => { try { await deleteDoc(doc(db, marketsColPath, market.id)); } catch (err) { alert('刪除失敗: ' + err.message); } } }); }; const handlePostAnnouncement = async (e) => { e.preventDefault(); setAnnouncementError(''); if(!newAnnouncement.trim()) { return setAnnouncementError('公告內容不可為空！'); } try { await addDoc(collection(db, announcementsColPath), { content: newAnnouncement, createdAt: serverTimestamp() }); setNewAnnouncement(''); } catch (err) { setAnnouncementError('發布失敗: ' + err.message); } }; const handleUpdateAnnouncement = async () => { if (!editingAnnouncement || !editingAnnouncement.content.trim()) return; try { await updateDoc(doc(db, announcementsColPath, editingAnnouncement.id), { content: editingAnnouncement.content }); setEditingAnnouncement(null); } catch (err) { alert('更新公告失敗: ' + err.message); }}; const handleDeleteAnnouncement = (announcementId) => { setConfirmation({ isOpen: true, title: '刪除公告', message: '確定要刪除這則公告嗎？', onConfirm: async () => { try { await deleteDoc(doc(db, announcementsColPath, announcementId)); } catch(err) { alert('刪除公告失敗: ' + err.message); } } }); }; return ( <div className="mt-8 pt-6 border-t"> <h3 className="text-xl font-bold text-gray-800 mb-4">👑 管理面板</h3> <div className="bg-gray-50 p-4 rounded-lg space-y-6"> <details className="space-y-3"><summary className="font-semibold cursor-pointer">攤主管理</summary>{/* ... Vendor management UI ... */}</details> <details className="space-y-3"><summary className="font-semibold cursor-pointer">市場管理</summary> <form onSubmit={handleAddNewMarket} className="space-y-3 bg-white p-3 rounded-md border"><select value={newMarketCity} onChange={e => setNewMarketCity(e.target.value)} className="w-full p-2 border rounded">{TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input value={newMarketName} onChange={e => setNewMarketName(e.target.value)} placeholder="新市場名稱" className="w-full p-2 border rounded"/>{marketError && <p className="text-red-500 text-sm">{marketError}</p>}<button type="submit" className="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600">新增市場</button></form><div className="space-y-2 max-h-40 overflow-y-auto p-1">{markets.map(m => (<div key={m.id}>{editingMarket?.id === m.id ? (<div className="p-2 bg-yellow-100 rounded border border-yellow-300 space-y-2"><select value={editingMarket.city} onChange={e => setEditingMarket({...editingMarket, city: e.target.value})} className="w-full p-1 border rounded">{TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input value={editingMarket.name} onChange={e => setEditingMarket({...editingMarket, name: e.target.value})} className="w-full p-1 border rounded" /><div className="flex gap-2"><button onClick={handleUpdateMarket} className="flex-1 text-xs bg-green-500 text-white py-1 px-2 rounded">儲存</button><button onClick={() => setEditingMarket(null)} className="flex-1 text-xs bg-gray-400 text-white py-1 px-2 rounded">取消</button></div></div>) : (<div className="flex justify-between items-center p-2 bg-white rounded border"><div><span className="font-semibold">{m.name}</span> ({m.city})</div><div className="flex gap-2"><button onClick={() => setEditingMarket(m)} className="text-xs bg-blue-500 text-white py-1 px-2 rounded">編輯</button><button onClick={() => handleDeleteMarket(m)} className="text-xs bg-red-500 text-white py-1 px-2 rounded">刪除</button></div></div>)}</div>))}</div></details> <details className="space-y-3"><summary className="font-semibold cursor-pointer">公告管理</summary>{/* ... Announcement management UI ... */}</details> <details><summary className="font-semibold cursor-pointer">資料備份/還原</summary>{/* ... Backup/Restore buttons ... */}</details> </div> </div> ); };
+const AdminPanel = ({ db, vendors, markets, announcements, setConfirmation, setResetPasswordModal }) => { const [newVendorId, setNewVendorId] = useState(''); const [newVendorName, setNewVendorName] = useState(''); const [newVendorPassword, setNewVendorPassword] = useState(''); const [isNewVendorAdmin, setIsNewVendorAdmin] = useState(false); const [vendorError, setVendorError] = useState(''); const [newMarketCity, setNewMarketCity] = useState(TAIWAN_CITIES[0]); const [newMarketName, setNewMarketName] = useState(''); const [marketError, setMarketError] = useState(''); const [newAnnouncement, setNewAnnouncement] = useState(''); const [announcementError, setAnnouncementError] = useState(''); const [editingMarket, setEditingMarket] = useState(null); const [editingVendor, setEditingVendor] = useState(null); const [editingAnnouncement, setEditingAnnouncement] = useState(null); const vendorsColPath = `artifacts/${appId}/public/data/vendors`; const marketsColPath = `artifacts/${appId}/public/data/markets`; const announcementsColPath = `artifacts/${appId}/public/data/announcements`; const handleAddVendor = async (e) => { e.preventDefault(); setVendorError(''); if (!newVendorId || !newVendorName || !newVendorPassword) { return setVendorError('編號、名稱和密碼不可為空！'); } if (vendors.some(v => v.id.toLowerCase() === newVendorId.toLowerCase())) { return setVendorError('此編號已存在！'); } try { await setDoc(doc(db, vendorsColPath, newVendorId), { name: newVendorName, isAdmin: isNewVendorAdmin, password: newVendorPassword }); setNewVendorId(''); setNewVendorName(''); setNewVendorPassword(''); setIsNewVendorAdmin(false); } catch (err) { setVendorError('新增失敗：' + err.message); } }; const handleDeleteVendor = async (vendorId) => { try { await deleteDoc(doc(db, vendorsColPath, vendorId)); } catch(err) { alert('刪除失敗：' + err.message); } }; const handleUpdateVendor = async () => { if (!editingVendor || !editingVendor.name) { return alert('攤主名稱不可為空！'); } try { const vendorRef = doc(db, vendorsColPath, editingVendor.id); await updateDoc(vendorRef, { name: editingVendor.name, isAdmin: editingVendor.isAdmin }); setEditingVendor(null); } catch (err) { alert('更新攤主失敗: ' + err.message); } }; const handleAddNewMarket = async (e) => { e.preventDefault(); setMarketError(''); if (!newMarketCity || !newMarketName) { return setMarketError('縣市和市場名稱不可為空！'); } try { await addDoc(collection(db, marketsColPath), { city: newMarketCity, name: newMarketName }); setNewMarketCity(TAIWAN_CITIES[0]); setNewMarketName(''); } catch (err) { setMarketError('新增市場失敗: ' + err.message); } }; const handleUpdateMarket = async () => { if (!editingMarket || !editingMarket.city || !editingMarket.name) { return alert('縣市和市場名稱不可為空！'); } try { const marketRef = doc(db, marketsColPath, editingMarket.id); await updateDoc(marketRef, { city: editingMarket.city, name: editingMarket.name }); setEditingMarket(null); } catch (err) { alert('更新失敗: ' + err.message); } }; const handleDeleteMarket = (market) => { setConfirmation({ isOpen: true, title: '刪除市場', message: `確定要刪除「${market.name}」嗎？`, onConfirm: async () => { try { await deleteDoc(doc(db, marketsColPath, market.id)); } catch (err) { alert('刪除失敗: ' + err.message); } } }); }; const handlePostAnnouncement = async (e) => { e.preventDefault(); setAnnouncementError(''); if(!newAnnouncement.trim()) { return setAnnouncementError('公告內容不可為空！'); } try { await addDoc(collection(db, announcementsColPath), { content: newAnnouncement, createdAt: serverTimestamp() }); setNewAnnouncement(''); } catch (err) { setAnnouncementError('發布失敗: ' + err.message); } }; const handleUpdateAnnouncement = async () => { if (!editingAnnouncement || !editingAnnouncement.content.trim()) return; try { await updateDoc(doc(db, announcementsColPath, editingAnnouncement.id), { content: editingAnnouncement.content }); setEditingAnnouncement(null); } catch (err) { alert('更新公告失敗: ' + err.message); }}; const handleDeleteAnnouncement = (announcementId) => { setConfirmation({ isOpen: true, title: '刪除公告', message: '確定要刪除這則公告嗎？', onConfirm: async () => { try { await deleteDoc(doc(db, announcementsColPath, announcementId)); } catch(err) { alert('刪除公告失敗: ' + err.message); } } }); }; const handleExport = () => { /* ... existing export logic ... */ }; const handleImport = (event) => { /* ... existing import logic ... */ }; return ( <div className="mt-8 pt-6 border-t"> <h3 className="text-xl font-bold text-gray-800 mb-4">👑 管理面板</h3> <div className="bg-gray-50 p-4 rounded-lg space-y-6"> <details className="space-y-3"><summary className="font-semibold cursor-pointer">攤主管理</summary><form onSubmit={handleAddVendor} className="space-y-3 bg-white p-3 rounded-md border"><input value={newVendorId} onChange={e => setNewVendorId(e.target.value)} placeholder="新攤主編號" className="w-full p-2 border rounded"/><input value={newVendorName} onChange={e => setNewVendorName(e.target.value)} placeholder="新攤主名稱" className="w-full p-2 border rounded"/><input value={newVendorPassword} onChange={e => setNewVendorPassword(e.target.value)} placeholder="初始密碼" className="w-full p-2 border rounded"/><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={isNewVendorAdmin} onChange={e => setIsNewVendorAdmin(e.target.checked)} /> 設為管理員</label>{vendorError && <p className="text-red-500 text-sm">{vendorError}</p>}<button type="submit" className="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600">新增攤主</button></form><div className="space-y-2 max-h-40 overflow-y-auto p-1">{vendors.map(v => (<div key={v.id}>{editingVendor?.id === v.id ? (<div className="p-2 bg-yellow-100 rounded border border-yellow-300 space-y-2"><input value={editingVendor.name} onChange={e => setEditingVendor({...editingVendor, name: e.target.value})} className="w-full p-1 border rounded" placeholder="攤主名稱" /><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editingVendor.isAdmin} onChange={e => setEditingVendor({...editingVendor, isAdmin: e.target.checked})} />設為管理員</label><div className="flex gap-2"><button onClick={handleUpdateVendor} className="flex-1 text-xs bg-green-500 text-white py-1 px-2 rounded">儲存</button><button onClick={() => setEditingVendor(null)} className="flex-1 text-xs bg-gray-400 text-white py-1 px-2 rounded">取消</button></div></div>) : (<div className="flex justify-between items-center p-2 bg-white rounded border"><div><span className="font-semibold">{v.name}</span> ({v.id}) {v.isAdmin && '👑'}</div><div className="flex gap-2"><button onClick={() => setEditingVendor(v)} className="text-xs bg-blue-500 text-white py-1 px-2 rounded">編輯</button><button onClick={() => setResetPasswordModal({ isOpen: true, vendor: v })} className="text-xs bg-yellow-500 text-white py-1 px-2 rounded">重設密碼</button>{v.id !== 'sd' && <button onClick={()=>setConfirmation({ isOpen: true, title: '刪除攤主', message: `您確定要刪除 ${v.name} (${v.id}) 嗎？`, onConfirm: () => handleDeleteVendor(v.id) })} className="text-xs bg-red-500 text-white py-1 px-2 rounded">刪除</button>}</div></div>)}</div>))}</div></details> <details className="space-y-3"><summary className="font-semibold cursor-pointer">市場管理</summary> <form onSubmit={handleAddNewMarket} className="space-y-3 bg-white p-3 rounded-md border"><select value={newMarketCity} onChange={e => setNewMarketCity(e.target.value)} className="w-full p-2 border rounded">{TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input value={newMarketName} onChange={e => setNewMarketName(e.target.value)} placeholder="新市場名稱" className="w-full p-2 border rounded"/>{marketError && <p className="text-red-500 text-sm">{marketError}</p>}<button type="submit" className="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600">新增市場</button></form><div className="space-y-2 max-h-40 overflow-y-auto p-1">{markets.map(m => (<div key={m.id}>{editingMarket?.id === m.id ? (<div className="p-2 bg-yellow-100 rounded border border-yellow-300 space-y-2"><select value={editingMarket.city} onChange={e => setEditingMarket({...editingMarket, city: e.target.value})} className="w-full p-1 border rounded">{TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input value={editingMarket.name} onChange={e => setEditingMarket({...editingMarket, name: e.target.value})} className="w-full p-1 border rounded" /><div className="flex gap-2"><button onClick={handleUpdateMarket} className="flex-1 text-xs bg-green-500 text-white py-1 px-2 rounded">儲存</button><button onClick={() => setEditingMarket(null)} className="flex-1 text-xs bg-gray-400 text-white py-1 px-2 rounded">取消</button></div></div>) : (<div className="flex justify-between items-center p-2 bg-white rounded border"><div><span className="font-semibold">{m.name}</span> ({m.city})</div><div className="flex gap-2"><button onClick={() => setEditingMarket(m)} className="text-xs bg-blue-500 text-white py-1 px-2 rounded">編輯</button><button onClick={() => handleDeleteMarket(m)} className="text-xs bg-red-500 text-white py-1 px-2 rounded">刪除</button></div></div>)}</div>))}</div></details> <details className="space-y-3"><summary className="font-semibold cursor-pointer">公告管理</summary><form onSubmit={handlePostAnnouncement} className="space-y-3 bg-white p-3 rounded-md border"><textarea value={newAnnouncement} onChange={e => setNewAnnouncement(e.target.value)} placeholder="輸入新公告內容..." rows="3" className="w-full p-2 border rounded"></textarea>{announcementError && <p className="text-red-500 text-sm">{announcementError}</p>}<button type="submit" className="w-full bg-purple-500 text-white p-2 rounded hover:bg-purple-600">發布新公告</button></form><div className="space-y-2 max-h-40 overflow-y-auto p-1">{announcements.map(ann => (<div key={ann.id}>{editingAnnouncement?.id === ann.id ? (<div className="p-2 bg-yellow-100 rounded border border-yellow-300 space-y-2"><textarea value={editingAnnouncement.content} onChange={e => setEditingAnnouncement({...editingAnnouncement, content: e.target.value})} rows="2" className="w-full p-1 border rounded"></textarea><div className="flex gap-2"><button onClick={handleUpdateAnnouncement} className="flex-1 text-xs bg-green-500 text-white py-1 px-2 rounded">儲存</button><button onClick={() => setEditingAnnouncement(null)} className="flex-1 text-xs bg-gray-400 text-white py-1 px-2 rounded">取消</button></div></div>) : (<div className="flex justify-between items-center p-2 bg-white rounded border"> <p className="text-sm flex-1">{ann.content}</p> <div className="flex gap-2"><button onClick={() => setEditingAnnouncement(ann)} className="text-xs bg-blue-500 text-white py-1 px-2 rounded">編輯</button><button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-xs bg-red-500 text-white py-1 px-2 rounded">刪除</button></div> </div>)}</div>))}</div></details> <details><summary className="font-semibold cursor-pointer">資料備份/還原</summary><div className="flex gap-2 mt-2"><button onClick={handleExport} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">匯出 (CSV)</button><label className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition cursor-pointer flex justify-center items-center">匯入 (CSV)<input type="file" accept=".csv" onChange={handleImport} className="hidden"/></label></div></details> </div> </div> ); };
 const LoginModal = ({ onClose, vendors, onLoginSuccess, db }) => { const [id, setId] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const handleLogin = async () => { setError(''); const vendor = vendors.find(v => v.id.toLowerCase() === id.toLowerCase()); if (vendor) { if (vendor.password) { if (vendor.password === password) { onLoginSuccess(vendor); } else { setError('密碼錯誤！'); } } else if (password) { try { const vendorRef = doc(db, `artifacts/${appId}/public/data/vendors`, vendor.id); await updateDoc(vendorRef, { password: password }); onLoginSuccess({ ...vendor, password: password }); } catch (err) { setError('設定初始密碼失敗，請稍後再試。'); } } else { setError('請輸入您的初始密碼。'); } } else { setError('找不到此攤位編號！'); } }; return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"> <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}> <h2 className="text-2xl font-bold mb-6 text-center">攤主登入</h2> <div className="space-y-4"> <input type="text" value={id} onChange={e => setId(e.target.value)} placeholder="請輸入攤位編號" className="w-full p-3 border rounded-lg" /> <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="請輸入密碼" className="w-full p-3 border rounded-lg" /> {error && <p className="text-red-500 text-center">{error}</p>} <button onClick={handleLogin} className="w-full bg-blue-500 text-white font-bold py-3 rounded-lg">登入</button> <button onClick={onClose} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg mt-2">取消</button> </div> </div> </div> ); };
 const AccountModal = ({ onClose, currentUser, db }) => { const [oldPassword, setOldPassword] = useState(''); const [newPassword, setNewPassword] = useState(''); const [confirmPassword, setConfirmPassword] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const handleChangePassword = async () => { setError(''); setSuccess(''); if (currentUser.password !== oldPassword) { return setError('舊密碼不正確！'); } if (!newPassword || newPassword !== confirmPassword) { return setError('新密碼不能為空，且兩次輸入必須相同！'); } try { const vendorRef = doc(db, `artifacts/${appId}/public/data/vendors`, currentUser.id); await updateDoc(vendorRef, { password: newPassword }); setSuccess('密碼更新成功！'); setOldPassword(''); setNewPassword(''); setConfirmPassword(''); } catch(err) { setError('密碼更新失敗，請稍後再試。'); } }; return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"> <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}> <h2 className="text-2xl font-bold mb-6 text-center">修改我的密碼</h2> <div className="space-y-4"> <input type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} placeholder="請輸入舊密碼" className="w-full p-3 border rounded-lg" /> <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="請輸入新密碼" className="w-full p-3 border rounded-lg" /> <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="再次確認新密碼" className="w-full p-3 border rounded-lg" /> {error && <p className="text-red-500 text-center">{error}</p>} {success && <p className="text-green-500 text-center">{success}</p>} <button onClick={handleChangePassword} className="w-full bg-green-500 text-white font-bold py-3 rounded-lg">儲存新密碼</button> <button onClick={onClose} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg mt-2">關閉</button> </div> </div> </div> ); };
 const ResetPasswordModal = ({ config, onClose, db }) => { const { vendor } = config; const [newPassword, setNewPassword] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const handleReset = async () => { setError(''); setSuccess(''); if (!newPassword) { return setError('新密碼不能為空！'); } try { const vendorRef = doc(db, `artifacts/${appId}/public/data/vendors`, vendor.id); await updateDoc(vendorRef, { password: newPassword }); setSuccess(`已為 ${vendor.name} 設定新密碼！`); setNewPassword(''); } catch(err) { setError('密碼重設失敗: ' + err.message); } }; return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"> <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}> <h2 className="text-2xl font-bold mb-2 text-center">重設密碼</h2> <p className="text-center text-gray-600 mb-6">您正在為 {vendor.name} ({vendor.id}) 重設密碼</p> <div className="space-y-4"> <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="請輸入新密碼" className="w-full p-3 border rounded-lg" /> {error && <p className="text-red-500 text-center">{error}</p>} {success && <p className="text-green-500 text-center">{success}</p>} <button onClick={handleReset} className="w-full bg-yellow-500 text-white font-bold py-3 rounded-lg">確認重設</button> <button onClick={onClose} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg mt-2">關閉</button> </div> </div> </div> ); };
