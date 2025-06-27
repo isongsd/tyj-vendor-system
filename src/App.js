@@ -151,7 +151,7 @@ const App = () => {
                     </div>
                 ) : (
                     <>
-                        <Announcements announcements={announcements} />
+                        {currentUser && <Announcements announcements={announcements} />}
                         {currentUser && <SmartSuggestions currentUser={currentUser} bookings={bookings} markets={markets} />}
                         <CalendarGrid currentDate={currentDate} setCurrentDate={setCurrentDate} bookings={bookings} onDayClick={handleDayClick} />
                         {currentUser?.isAdmin && <AdminPanel db={db} vendors={vendors} bookings={bookings} markets={markets} announcements={announcements} setConfirmation={setConfirmation} setResetPasswordModal={setResetPasswordModal} />}
