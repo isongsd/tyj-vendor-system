@@ -213,7 +213,7 @@ const SmartSuggestions = ({ currentUser, bookings, markets }) => {
             return b.count - a.count;
         });
 
-        return potentialMarkets.slice(0, 5).map(m => ({...m, reason: "近期未拜訪"}));
+        return potentialMarkets.slice(0, 5).map(m => ({...m, reason: "這個好地方很久沒見了，去看看？"}));
 
     }, [currentUser, bookings, markets]);
     
@@ -273,7 +273,286 @@ const DayDetailModal = ({ detail, onClose, bookings, vendors, currentUser, onAdd
         </div> 
     ); 
 };
-const AdminPanel = ({ db, vendors, markets, announcements, setConfirmation, setResetPasswordModal }) => { const [newVendorId, setNewVendorId] = useState(''); const [newVendorName, setNewVendorName] = useState(''); const [newVendorPassword, setNewVendorPassword] = useState(''); const [isNewVendorAdmin, setIsNewVendorAdmin] = useState(false); const [vendorError, setVendorError] = useState(''); const [newMarketCity, setNewMarketCity] = useState(TAIWAN_CITIES[0]); const [newMarketName, setNewMarketName] = useState(''); const [marketError, setMarketError] = useState(''); const [newAnnouncement, setNewAnnouncement] = useState(''); const [announcementError, setAnnouncementError] = useState(''); const [editingMarket, setEditingMarket] = useState(null); const [editingVendor, setEditingVendor] = useState(null); const [editingAnnouncement, setEditingAnnouncement] = useState(null); const vendorsColPath = `artifacts/${appId}/public/data/vendors`; const marketsColPath = `artifacts/${appId}/public/data/markets`; const announcementsColPath = `artifacts/${appId}/public/data/announcements`; const handleAddVendor = async (e) => { e.preventDefault(); setVendorError(''); if (!newVendorId || !newVendorName || !newVendorPassword) { return setVendorError('編號、名稱和密碼不可為空！'); } if (vendors.some(v => v.id.toLowerCase() === newVendorId.toLowerCase())) { return setVendorError('此編號已存在！'); } try { await setDoc(doc(db, vendorsColPath, newVendorId), { name: newVendorName, isAdmin: isNewVendorAdmin, password: newVendorPassword }); setNewVendorId(''); setNewVendorName(''); setNewVendorPassword(''); setIsNewVendorAdmin(false); } catch (err) { setVendorError('新增失敗：' + err.message); } }; const handleDeleteVendor = async (vendorId) => { try { await deleteDoc(doc(db, vendorsColPath, vendorId)); } catch(err) { alert('刪除失敗：' + err.message); } }; const handleUpdateVendor = async () => { if (!editingVendor || !editingVendor.name) { return alert('夥伴名稱不可為空！'); } try { const vendorRef = doc(db, vendorsColPath, editingVendor.id); await updateDoc(vendorRef, { name: editingVendor.name, isAdmin: editingVendor.isAdmin }); setEditingVendor(null); } catch (err) { alert('更新夥伴失敗: ' + err.message); } }; const handleAddNewMarket = async (e) => { e.preventDefault(); setMarketError(''); if (!newMarketCity || !newMarketName) { return setMarketError('縣市和市場名稱不可為空！'); } try { await addDoc(collection(db, marketsColPath), { city: newMarketCity, name: newMarketName }); setNewMarketCity(TAIWAN_CITIES[0]); setNewMarketName(''); } catch (err) { setMarketError('新增市場失敗: ' + err.message); } }; const handleUpdateMarket = async () => { if (!editingMarket || !editingMarket.city || !editingMarket.name) { return alert('縣市和市場名稱不可為空！'); } try { const marketRef = doc(db, marketsColPath, editingMarket.id); await updateDoc(marketRef, { city: editingMarket.city, name: editingMarket.name }); setEditingMarket(null); } catch (err) { alert('更新失敗: ' + err.message); } }; const handleDeleteMarket = (market) => { setConfirmation({ isOpen: true, title: '刪除市場', message: `確定要刪除「${market.name}」嗎？`, onConfirm: async () => { try { await deleteDoc(doc(db, marketsColPath, market.id)); } catch (err) { alert('刪除失敗: ' + err.message); } } }); }; const handlePostAnnouncement = async (e) => { e.preventDefault(); setAnnouncementError(''); if(!newAnnouncement.trim()) { return setAnnouncementError('公告內容不可為空！'); } try { await addDoc(collection(db, announcementsColPath), { content: newAnnouncement, createdAt: serverTimestamp() }); setNewAnnouncement(''); } catch (err) { setAnnouncementError('發布失敗: ' + err.message); } }; const handleUpdateAnnouncement = async () => { if (!editingAnnouncement || !editingAnnouncement.content.trim()) return; try { await updateDoc(doc(db, announcementsColPath, editingAnnouncement.id), { content: editingAnnouncement.content }); setEditingAnnouncement(null); } catch (err) { alert('更新公告失敗: ' + err.message); }}; const handleDeleteAnnouncement = (announcementId) => { setConfirmation({ isOpen: true, title: '刪除公告', message: '確定要刪除這則公告嗎？', onConfirm: async () => { try { await deleteDoc(doc(db, announcementsColPath, announcementId)); } catch(err) { alert('刪除公告失敗: ' + err.message); } } }); }; return ( <div className="mt-8 pt-6 border-t"> <h3 className="text-xl font-bold text-gray-800 mb-4">👑 管理面板</h3> <div className="bg-gray-50 p-4 rounded-lg space-y-6"> <details className="space-y-3"><summary className="font-semibold cursor-pointer">夥伴管理</summary>{/* ... Vendor management UI ... */}</details> <details className="space-y-3"><summary className="font-semibold cursor-pointer">市場管理</summary> <form onSubmit={handleAddNewMarket} className="space-y-3 bg-white p-3 rounded-md border"><select value={newMarketCity} onChange={e => setNewMarketCity(e.target.value)} className="w-full p-2 border rounded">{TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input value={newMarketName} onChange={e => setNewMarketName(e.target.value)} placeholder="新市場名稱" className="w-full p-2 border rounded"/>{marketError && <p className="text-red-500 text-sm">{marketError}</p>}<button type="submit" className="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600">新增市場</button></form><div className="space-y-2 max-h-40 overflow-y-auto p-1">{markets.map(m => (<div key={m.id}>{editingMarket?.id === m.id ? (<div className="p-2 bg-yellow-100 rounded border border-yellow-300 space-y-2"><select value={editingMarket.city} onChange={e => setEditingMarket({...editingMarket, city: e.target.value})} className="w-full p-1 border rounded">{TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input value={editingMarket.name} onChange={e => setEditingMarket({...editingMarket, name: e.target.value})} className="w-full p-1 border rounded" /><div className="flex gap-2"><button onClick={handleUpdateMarket} className="flex-1 text-xs bg-green-500 text-white py-1 px-2 rounded">儲存</button><button onClick={() => setEditingMarket(null)} className="flex-1 text-xs bg-gray-400 text-white py-1 px-2 rounded">取消</button></div></div>) : (<div className="flex justify-between items-center p-2 bg-white rounded border"><div><span className="font-semibold">{m.name}</span> ({m.city})</div><div className="flex gap-2"><button onClick={() => setEditingMarket(m)} className="text-xs bg-blue-500 text-white py-1 px-2 rounded">編輯</button><button onClick={() => handleDeleteMarket(m)} className="text-xs bg-red-500 text-white py-1 px-2 rounded">刪除</button></div></div>)}</div>))}</div></details> <details className="space-y-3"><summary className="font-semibold cursor-pointer">公告管理</summary>{/* ... Announcement management UI ... */}</details> <details><summary className="font-semibold cursor-pointer">資料備份/還原</summary>{/* ... Backup/Restore buttons ... */}</details> </div> </div> ); };
+const AdminPanel = ({ db, vendors, markets, announcements, setConfirmation, setResetPasswordModal }) => {
+    const [newVendorId, setNewVendorId] = useState('');
+    const [newVendorName, setNewVendorName] = useState('');
+    const [newVendorPassword, setNewVendorPassword] = useState('');
+    const [isNewVendorAdmin, setIsNewVendorAdmin] = useState(false);
+    const [vendorError, setVendorError] = useState('');
+    const [newMarketCity, setNewMarketCity] = useState(TAIWAN_CITIES[0]);
+    const [newMarketName, setNewMarketName] = useState('');
+    const [marketError, setMarketError] = useState('');
+    const [newAnnouncement, setNewAnnouncement] = useState('');
+    const [announcementError, setAnnouncementError] = useState('');
+    const [editingMarket, setEditingMarket] = useState(null);
+    const [editingVendor, setEditingVendor] = useState(null);
+    const [editingAnnouncement, setEditingAnnouncement] = useState(null);
+
+    const vendorsColPath = `artifacts/${appId}/public/data/vendors`;
+    const marketsColPath = `artifacts/${appId}/public/data/markets`;
+    const announcementsColPath = `artifacts/${appId}/public/data/announcements`;
+
+    const handleAddVendor = async (e) => {
+        e.preventDefault();
+        setVendorError('');
+        if (!newVendorId || !newVendorName || !newVendorPassword) {
+            return setVendorError('編號、名稱和密碼不可為空！');
+        }
+        if (vendors.some(v => v.id.toLowerCase() === newVendorId.toLowerCase())) {
+            return setVendorError('此編號已存在！');
+        }
+        try {
+            await setDoc(doc(db, vendorsColPath, newVendorId), { name: newVendorName, isAdmin: isNewVendorAdmin, password: newVendorPassword });
+            setNewVendorId('');
+            setNewVendorName('');
+            setNewVendorPassword('');
+            setIsNewVendorAdmin(false);
+        } catch (err) {
+            setVendorError('新增失敗：' + err.message);
+        }
+    };
+
+    const handleDeleteVendor = async (vendorId) => {
+        try {
+            await deleteDoc(doc(db, vendorsColPath, vendorId));
+        } catch (err) {
+            alert('刪除失敗：' + err.message);
+        }
+    };
+
+    const handleUpdateVendor = async () => {
+        if (!editingVendor || !editingVendor.name) {
+            return alert('夥伴名稱不可為空！');
+        }
+        try {
+            const vendorRef = doc(db, vendorsColPath, editingVendor.id);
+            await updateDoc(vendorRef, { name: editingVendor.name, isAdmin: editingVendor.isAdmin });
+            setEditingVendor(null);
+        } catch (err) {
+            alert('更新夥伴失敗: ' + err.message);
+        }
+    };
+
+    const handleAddNewMarket = async (e) => {
+        e.preventDefault();
+        setMarketError('');
+        if (!newMarketCity || !newMarketName) {
+            return setMarketError('縣市和市場名稱不可為空！');
+        }
+        try {
+            await addDoc(collection(db, marketsColPath), { city: newMarketCity, name: newMarketName });
+            setNewMarketCity(TAIWAN_CITIES[0]);
+            setNewMarketName('');
+        } catch (err) {
+            setMarketError('新增市場失敗: ' + err.message);
+        }
+    };
+
+    const handleUpdateMarket = async () => {
+        if (!editingMarket || !editingMarket.city || !editingMarket.name) {
+            return alert('縣市和市場名稱不可為空！');
+        }
+        try {
+            const marketRef = doc(db, marketsColPath, editingMarket.id);
+            await updateDoc(marketRef, { city: editingMarket.city, name: editingMarket.name });
+            setEditingMarket(null);
+        } catch (err) {
+            alert('更新失敗: ' + err.message);
+        }
+    };
+
+    const handleDeleteMarket = (market) => {
+        setConfirmation({
+            isOpen: true,
+            title: '刪除市場',
+            message: `確定要刪除「${market.name}」嗎？`,
+            onConfirm: async () => {
+                try {
+                    await deleteDoc(doc(db, marketsColPath, market.id));
+                } catch (err) {
+                    alert('刪除失敗: ' + err.message);
+                }
+            }
+        });
+    };
+
+    const handlePostAnnouncement = async (e) => {
+        e.preventDefault();
+        setAnnouncementError('');
+        if (!newAnnouncement.trim()) {
+            return setAnnouncementError('公告內容不可為空！');
+        }
+        try {
+            await addDoc(collection(db, announcementsColPath), { content: newAnnouncement, createdAt: serverTimestamp() });
+            setNewAnnouncement('');
+        } catch (err) {
+            setAnnouncementError('發布失敗: ' + err.message);
+        }
+    };
+    
+    const handleUpdateAnnouncement = async () => {
+        if (!editingAnnouncement || !editingAnnouncement.content.trim()) return;
+        try {
+            await updateDoc(doc(db, announcementsColPath, editingAnnouncement.id), { content: editingAnnouncement.content });
+            setEditingAnnouncement(null);
+        } catch (err) {
+            alert('更新公告失敗: ' + err.message);
+        }
+    };
+
+    const handleDeleteAnnouncement = (announcementId) => {
+        setConfirmation({
+            isOpen: true,
+            title: '刪除公告',
+            message: '確定要刪除這則公告嗎？',
+            onConfirm: async () => {
+                try {
+                    await deleteDoc(doc(db, announcementsColPath, announcementId));
+                } catch (err) {
+                    alert('刪除公告失敗: ' + err.message);
+                }
+            }
+        });
+    };
+    
+    const handleExport = () => {
+        // Placeholder for export logic
+        alert("匯出功能待開發！");
+    };
+    
+    const handleImport = (event) => {
+        // Placeholder for import logic
+        alert("匯入功能待開發！");
+    };
+
+    return (
+        <div className="mt-8 pt-6 border-t">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">👑 管理面板</h3>
+            <div className="bg-gray-50 p-4 rounded-lg space-y-6">
+                <details className="space-y-3">
+                    <summary className="font-semibold cursor-pointer">夥伴管理</summary>
+                    <form onSubmit={handleAddVendor} className="space-y-3 bg-white p-3 rounded-md border">
+                        <input value={newVendorId} onChange={e => setNewVendorId(e.target.value)} placeholder="新夥伴編號" className="w-full p-2 border rounded" />
+                        <input value={newVendorName} onChange={e => setNewVendorName(e.target.value)} placeholder="新夥伴名稱" className="w-full p-2 border rounded" />
+                        <input value={newVendorPassword} onChange={e => setNewVendorPassword(e.target.value)} placeholder="初始密碼" className="w-full p-2 border rounded" />
+                        <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={isNewVendorAdmin} onChange={e => setIsNewVendorAdmin(e.target.checked)} /> 設為管理員
+                        </label>
+                        {vendorError && <p className="text-red-500 text-sm">{vendorError}</p>}
+                        <button type="submit" className="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600">新增夥伴</button>
+                    </form>
+                    <div className="space-y-2 max-h-40 overflow-y-auto p-1">
+                        {vendors.map(v => (
+                            <div key={v.id}>
+                                {editingVendor?.id === v.id ? (
+                                    <div className="p-2 bg-yellow-100 rounded border border-yellow-300 space-y-2">
+                                        <input value={editingVendor.name} onChange={e => setEditingVendor({ ...editingVendor, name: e.target.value })} className="w-full p-1 border rounded" placeholder="夥伴名稱" />
+                                        <label className="flex items-center gap-2 text-sm">
+                                            <input type="checkbox" checked={editingVendor.isAdmin} onChange={e => setEditingVendor({ ...editingVendor, isAdmin: e.target.checked })} />設為管理員
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleUpdateVendor} className="flex-1 text-xs bg-green-500 text-white py-1 px-2 rounded">儲存</button>
+                                            <button onClick={() => setEditingVendor(null)} className="flex-1 text-xs bg-gray-400 text-white py-1 px-2 rounded">取消</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-between items-center p-2 bg-white rounded border">
+                                        <div>
+                                            <span className="font-semibold">{v.name}</span> ({v.id}) {v.isAdmin && '👑'}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setEditingVendor(v)} className="text-xs bg-blue-500 text-white py-1 px-2 rounded">編輯</button>
+                                            <button onClick={() => setResetPasswordModal({ isOpen: true, vendor: v })} className="text-xs bg-yellow-500 text-white py-1 px-2 rounded">重設密碼</button>
+                                            {v.id !== 'sd' && <button onClick={() => setConfirmation({ isOpen: true, title: '刪除夥伴', message: `您確定要刪除 ${v.name} (${v.id}) 嗎？`, onConfirm: () => handleDeleteVendor(v.id) })} className="text-xs bg-red-500 text-white py-1 px-2 rounded">刪除</button>}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </details>
+                <details className="space-y-3">
+                    <summary className="font-semibold cursor-pointer">市場管理</summary>
+                    <form onSubmit={handleAddNewMarket} className="space-y-3 bg-white p-3 rounded-md border">
+                        <select value={newMarketCity} onChange={e => setNewMarketCity(e.target.value)} className="w-full p-2 border rounded">
+                            {TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <input value={newMarketName} onChange={e => setNewMarketName(e.target.value)} placeholder="新市場名稱" className="w-full p-2 border rounded" />
+                        {marketError && <p className="text-red-500 text-sm">{marketError}</p>}
+                        <button type="submit" className="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600">新增市場</button>
+                    </form>
+                    <div className="space-y-2 max-h-40 overflow-y-auto p-1">
+                        {markets.map(m => (
+                            <div key={m.id}>
+                                {editingMarket?.id === m.id ? (
+                                    <div className="p-2 bg-yellow-100 rounded border border-yellow-300 space-y-2">
+                                        <select value={editingMarket.city} onChange={e => setEditingMarket({ ...editingMarket, city: e.target.value })} className="w-full p-1 border rounded">
+                                            {TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                        <input value={editingMarket.name} onChange={e => setEditingMarket({ ...editingMarket, name: e.target.value })} className="w-full p-1 border rounded" />
+                                        <div className="flex gap-2">
+                                            <button onClick={handleUpdateMarket} className="flex-1 text-xs bg-green-500 text-white py-1 px-2 rounded">儲存</button>
+                                            <button onClick={() => setEditingMarket(null)} className="flex-1 text-xs bg-gray-400 text-white py-1 px-2 rounded">取消</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-between items-center p-2 bg-white rounded border">
+                                        <div><span className="font-semibold">{m.name}</span> ({m.city})</div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setEditingMarket(m)} className="text-xs bg-blue-500 text-white py-1 px-2 rounded">編輯</button>
+                                            <button onClick={() => handleDeleteMarket(m)} className="text-xs bg-red-500 text-white py-1 px-2 rounded">刪除</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </details>
+                <details className="space-y-3">
+                    <summary className="font-semibold cursor-pointer">公告管理</summary>
+                    <form onSubmit={handlePostAnnouncement} className="space-y-3 bg-white p-3 rounded-md border">
+                        <textarea value={newAnnouncement} onChange={e => setNewAnnouncement(e.target.value)} placeholder="輸入新公告內容..." rows="3" className="w-full p-2 border rounded"></textarea>
+                        {announcementError && <p className="text-red-500 text-sm">{announcementError}</p>}
+                        <button type="submit" className="w-full bg-purple-500 text-white p-2 rounded hover:bg-purple-600">發布新公告</button>
+                    </form>
+                    <div className="space-y-2 max-h-40 overflow-y-auto p-1">
+                        {announcements.map(ann => (
+                            <div key={ann.id}>
+                                {editingAnnouncement?.id === ann.id ? (
+                                    <div className="p-2 bg-yellow-100 rounded border border-yellow-300 space-y-2">
+                                        <textarea value={editingAnnouncement.content} onChange={e => setEditingAnnouncement({ ...editingAnnouncement, content: e.target.value })} rows="2" className="w-full p-1 border rounded"></textarea>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleUpdateAnnouncement} className="flex-1 text-xs bg-green-500 text-white py-1 px-2 rounded">儲存</button>
+                                            <button onClick={() => setEditingAnnouncement(null)} className="flex-1 text-xs bg-gray-400 text-white py-1 px-2 rounded">取消</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-between items-center p-2 bg-white rounded border">
+                                        <p className="text-sm flex-1">{ann.content}</p>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setEditingAnnouncement(ann)} className="text-xs bg-blue-500 text-white py-1 px-2 rounded">編輯</button>
+                                            <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-xs bg-red-500 text-white py-1 px-2 rounded">刪除</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </details>
+                <details>
+                    <summary className="font-semibold cursor-pointer">資料備份/還原</summary>
+                    <div className="flex gap-2 mt-2">
+                        <button onClick={handleExport} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">匯出 (CSV)</button>
+                        <label className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition cursor-pointer flex justify-center items-center">
+                            匯入 (CSV)
+                            <input type="file" accept=".csv" onChange={handleImport} className="hidden" />
+                        </label>
+                    </div>
+                </details>
+            </div>
+        </div>
+    );
+};
 const LoginModal = ({ onClose, vendors, onLoginSuccess, db }) => { const [id, setId] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const handleLogin = async () => { setError(''); const vendor = vendors.find(v => v.id.toLowerCase() === id.toLowerCase()); if (vendor) { if (vendor.password) { if (vendor.password === password) { onLoginSuccess(vendor); } else { setError('密碼錯誤！'); } } else if (password) { try { const vendorRef = doc(db, `artifacts/${appId}/public/data/vendors`, vendor.id); await updateDoc(vendorRef, { password: password }); onLoginSuccess({ ...vendor, password: password }); } catch (err) { setError('設定初始密碼失敗，請稍後再試。'); } } else { setError('請輸入您的初始密碼。'); } } else { setError('找不到此攤位編號！'); } }; return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"> <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}> <h2 className="text-2xl font-bold mb-6 text-center">夥伴登入</h2> <div className="space-y-4"> <input type="text" value={id} onChange={e => setId(e.target.value)} placeholder="請輸入攤位編號" className="w-full p-3 border rounded-lg" /> <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="請輸入密碼" className="w-full p-3 border rounded-lg" /> {error && <p className="text-red-500 text-center">{error}</p>} <button onClick={handleLogin} className="w-full bg-blue-500 text-white font-bold py-3 rounded-lg">登入</button> <button onClick={onClose} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg mt-2">取消</button> </div> </div> </div> ); };
 const AccountModal = ({ onClose, currentUser, db, bookings }) => { const [oldPassword, setOldPassword] = useState(''); const [newPassword, setNewPassword] = useState(''); const [confirmPassword, setConfirmPassword] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const [startDate, setStartDate] = useState(''); const [endDate, setEndDate] = useState(''); const [salesResult, setSalesResult] = useState(null); const handleChangePassword = async () => { setError(''); setSuccess(''); if (currentUser.password !== oldPassword) { return setError('舊密碼不正確！'); } if (!newPassword || newPassword !== confirmPassword) { return setError('新密碼不能為空，且兩次輸入必須相同！'); } try { const vendorRef = doc(db, `artifacts/${appId}/public/data/vendors`, currentUser.id); await updateDoc(vendorRef, { password: newPassword }); setSuccess('密碼更新成功！'); setOldPassword(''); setNewPassword(''); setConfirmPassword(''); } catch(err) { setError('密碼更新失敗，請稍後再試。'); } }; const calculateSales = (start, end) => { const userBookings = bookings.filter(b => b.vendorId === currentUser.id && new Date(b.date) >= start && new Date(b.date) <= end); const totalSales = userBookings.reduce((sum, b) => sum + (b.salesQuantity || 0), 0); setSalesResult(`從 ${start.toLocaleDateString()} 到 ${end.toLocaleDateString()}，總銷量為: ${totalSales} 件`); }; const handleCustomQuery = () => { if(startDate && endDate) { calculateSales(new Date(startDate), new Date(endDate)); }}; const handleThisMonthQuery = () => { const now = new Date(); const start = new Date(now.getFullYear(), now.getMonth(), 1); const end = new Date(now.getFullYear(), now.getMonth() + 1, 0); calculateSales(start, end);}; return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"> <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}> <h2 className="text-2xl font-bold mb-6 text-center">我的帳號</h2> <div className="space-y-4"> <details><summary className="font-semibold cursor-pointer">修改密碼</summary><div className="pt-2 space-y-2"><input type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} placeholder="請輸入舊密碼" className="w-full p-3 border rounded-lg" /> <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="請輸入新密碼" className="w-full p-3 border rounded-lg" /> <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="再次確認新密碼" className="w-full p-3 border rounded-lg" /> {error && <p className="text-red-500 text-center">{error}</p>} {success && <p className="text-green-500 text-center">{success}</p>} <button onClick={handleChangePassword} className="w-full bg-green-500 text-white font-bold py-3 rounded-lg">儲存新密碼</button></div></details> <details open><summary className="font-semibold cursor-pointer">業績查詢</summary><div className="pt-2 space-y-3"><div className="flex gap-2 items-center"><label className="text-sm">自訂範圍:</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="flex-1 p-2 border rounded-lg" /><span className="px-1">至</span><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="flex-1 p-2 border rounded-lg" /></div><button onClick={handleCustomQuery} className="w-full bg-blue-500 text-white font-bold py-2 rounded-lg">查詢自訂銷量</button><button onClick={handleThisMonthQuery} className="w-full bg-indigo-500 text-white font-bold py-2 rounded-lg mt-2">查詢本月銷量</button>{salesResult && <p className="text-center font-bold mt-3 p-2 bg-yellow-100 rounded-lg">{salesResult}</p>}</div></details> <details><summary className="font-semibold cursor-pointer">夥伴小提醒</summary><div className="pt-2 text-sm text-gray-600 bg-gray-100 p-3 rounded-lg"><p>💡 **出車前檢查:** 今日商品、陳列道具、零錢是否備妥？</p><p className="mt-1">💡 **路線規劃:** 提早查詢交通狀況，預留充足時間抵達市場。</p></div></details> <button onClick={onClose} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg mt-4">關閉</button> </div> </div> </div> ); };
 const ResetPasswordModal = ({ config, onClose, db }) => { const { vendor } = config; const [newPassword, setNewPassword] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const handleReset = async () => { setError(''); setSuccess(''); if (!newPassword) { return setError('新密碼不能為空！'); } try { const vendorRef = doc(db, `artifacts/${appId}/public/data/vendors`, vendor.id); await updateDoc(vendorRef, { password: newPassword }); setSuccess(`已為 ${vendor.name} 設定新密碼！`); setNewPassword(''); } catch(err) { setError('密碼重設失敗: ' + err.message); } }; return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"> <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}> <h2 className="text-2xl font-bold mb-2 text-center">重設密碼</h2> <p className="text-center text-gray-600 mb-6">您正在為 {vendor.name} ({vendor.id}) 重設密碼</p> <div className="space-y-4"> <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="請輸入新密碼" className="w-full p-3 border rounded-lg" /> {error && <p className="text-red-500 text-center">{error}</p>} {success && <p className="text-green-500 text-center">{success}</p>} <button onClick={handleReset} className="w-full bg-yellow-500 text-white font-bold py-3 rounded-lg">確認重設</button> <button onClick={onClose} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg mt-2">關閉</button> </div> </div> </div> ); };
