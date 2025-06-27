@@ -224,10 +224,11 @@ const SalesInput = ({ booking, db, setEditingSales }) => {
 };
 
 const DayDetailModal = ({ detail, onClose, bookings, vendors, currentUser, onAddBooking, onEditBooking, setGeminiModal, db }) => { 
+    const [editingSales, setEditingSales] = useState(null);
     if (!detail.isOpen) return null; 
+    
     const dayBookings = bookings.filter(b => b.date === detail.date).sort((a,b) => a.marketName.localeCompare(b.name)); 
     const vendorMap = new Map(vendors.map(v => [v.id, v.name])); 
-    const [editingSales, setEditingSales] = useState(null);
 
     const handleGeneratePromoText = (booking) => { const prompt = `請為「童顏家」產生一篇熱情有活力的社群媒體宣傳短文，用於宣傳擺攤活動。- 活動日期: ${booking.date} - 活動地點: ${booking.marketCity} ${booking.marketName} - 品牌與產品: 童顏家，專注於最新潮流的女鞋、女裝及時尚配件。- 風格要求: 親切、活潑、吸引人，結尾要包含行動呼籲 (例如：快來找我們尋寶！)。- 重要: 文案中請不要提及任何攤主個人姓名。- 請使用繁體中文，並適度加入生動的表情符號 (emoji)。`; callGeminiAPI(prompt, setGeminiModal); }; 
     
